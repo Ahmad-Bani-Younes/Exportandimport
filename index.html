@@ -105,10 +105,33 @@
       .print-table th{ background:#f2f2f2 }
       .report .foot{ display:flex; justify-content:space-between; margin-top:18px; font-size:12px }
       .report .sig{ min-width:160px; border-top:1px dashed #777; text-align:center; padding-top:6px }
-      /* مرفقات داخل التقرير (اختياري لاحقًا) */
-      .p-attachments {margin-top:8px; display:flex; gap:4px; flex-wrap:wrap}
-      .p-attachments img {width:90px;height:90px;object-fit:cover;border:1px solid #555}
+      .p-cell-att{ display:flex; flex-wrap:wrap; gap:4px; align-items:flex-start }
+      .p-thumb{ position:relative; width:60px; height:60px; border:1px solid #555; overflow:hidden }
+      .p-thumb img{ width:100%; height:100%; object-fit:cover }
+      .p-thumb span{ position:absolute; bottom:0; left:0; right:0; background:rgba(255,255,255,.85); color:#000; font-size:9px; text-align:center; line-height:1.2 }
     }
+
+    /* حوار الكاميرا (ماسح المستند) */
+    #cameraDialog{border:none;border-radius:16px;padding:0;max-width:720px;width:calc(100% - 24px);background:var(--panel);color:var(--text)}
+    #cameraDialog::backdrop{background:rgba(0,0,0,.62)}
+    .cam-h{padding:12px 16px;border-bottom:1px solid var(--border);font-weight:800}
+    .cam-b{padding:0}
+    .cam-f{padding:12px 16px;border-top:1px solid var(--border);display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+    .cam-wrap{position:relative; background:#000}
+    #camVideo, #camCanvas{width:100%; height:auto; display:block}
+    .cam-overlay{
+      position:absolute; inset:0; pointer-events:none;
+      background:
+        linear-gradient(to right, rgba(255,255,255,.12) 1px, transparent 1px) 0 0/25% 100%,
+        linear-gradient(to bottom, rgba(255,255,255,.12) 1px, transparent 1px) 0 0/100% 25%;
+      outline:120px solid rgba(0,0,0,.25);
+    }
+    .cam-tip{position:absolute; bottom:8px; inset-inline:8px; background:rgba(0,0,0,.45); color:#fff; padding:6px 8px; border-radius:8px; font-size:12px}
+    .cam-ctrls{display:flex; justify-content:space-between; align-items:center; gap:8px; padding:8px 12px; border-top:1px solid var(--border)}
+    .cam-ctrls .left, .cam-ctrls .right{display:flex; gap:8px; align-items:center; flex-wrap:wrap}
+    .seg{display:inline-flex; border:1px solid var(--border); border-radius:10px; overflow:hidden}
+    .seg button{background:transparent; border:0; padding:8px 10px; color:var(--text); cursor:pointer}
+    .seg button.active{background:var(--primary); color:#fff}
   </style>
 </head>
 <body>
@@ -178,14 +201,15 @@
                 <input type="text" id="note" placeholder="تفاصيل إضافية (اختياري)" />
               </div>
 
-              <!-- المرفقات + OCR -->
+              <!-- المرفقات + OCR + كاميرا -->
               <div style="grid-column: span 12">
                 <label>مرفقات الفاتورة (صور)</label>
-                <input type="file" id="files" accept="image/*" multiple />
-                <div id="filesPreview" class="thumbs"></div>
-                <div style="margin-top:6px; display:flex; gap:8px; flex-wrap:wrap">
-                  <button type="button" id="ocrBtn" class="secondary" title="قراءة الفاتورة تلقائيًا">قراءة الفاتورة تلقائيًا (OCR)</button>
+                <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center">
+                  <input type="file" id="files" accept="image/*" multiple />
+                  <button type="button" id="camBtn" class="secondary" title="التقاط بالموبايل/الكاميرا">التقاط بالكاميرا</button>
+                  <button type="button" id="ocrBtn" class="secondary" title="قراءة الفاتورة تلقائيًا">OCR</button>
                 </div>
+                <div id="filesPreview" class="thumbs"></div>
               </div>
             </div>
             <div class="col" style="grid-column: span 12; display:flex; gap:8px; margin-top:6px">
@@ -260,6 +284,20 @@
           <label>الوقت</label>
           <input type="time" id="editTime" />
         </div>
+
+        <!-- مرفقات في نافذة التعديل -->
+        <div style="grid-column: span 12">
+          <label>المرفقات الحالية</label>
+          <div id="editOldAtt" class="thumbs"></div>
+        </div>
+        <div style="grid-column: span 12">
+          <label>إضافة مرفقات جديدة</label>
+          <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center">
+            <input type="file" id="editFiles" accept="image/*" multiple />
+            <button type="button" id="editCamBtn" class="secondary">التقاط بالكاميرا</button>
+          </div>
+          <div id="editFilesPreview" class="thumbs"></div>
+        </div>
       </form>
     </div>
     <div class="dlg-f" style="padding:12px 16px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px">
@@ -277,6 +315,37 @@
     </div>
   </dialog>
 
+  <!-- حوار الكاميرا -->
+  <dialog id="cameraDialog" class="no-print">
+    <div class="cam-h">التقاط مستند بالكاميرا</div>
+    <div class="cam-b">
+      <div class="cam-wrap">
+        <video id="camVideo" playsinline autoplay></video>
+        <canvas id="camCanvas" style="display:none"></canvas>
+        <div class="cam-overlay"></div>
+        <div class="cam-tip">ضع الفاتورة داخل الإطار، ثبّت الجهاز وحاول تجنّب الظلال. استخدم الإضاءة عند الحاجة.</div>
+      </div>
+      <div class="cam-ctrls">
+        <div class="left">
+          <div class="seg" aria-label="وضع المسح">
+            <button type="button" data-mode="auto" class="active" id="modeAuto">تحسين</button>
+            <button type="button" data-mode="color" id="modeColor">ملون</button>
+            <button type="button" data-mode="bw" id="modeBW">أبيض وأسود</button>
+          </div>
+          <button type="button" class="secondary" id="rotateBtn" title="تدوير 90°">↻ تدوير</button>
+        </div>
+        <div class="right">
+          <button type="button" class="secondary" id="torchBtn" title="إضاءة">💡</button>
+          <button type="button" class="secondary" id="flipBtn" title="تبديل الكاميرا">🔄</button>
+          <button type="button" class="good" id="shootBtn" title="التقاط">● التقاط</button>
+          <button type="button" class="secondary" id="retakeBtn" style="display:none">إعادة</button>
+          <button type="button" id="usePhotoBtn" style="display:none">استخدام الصورة</button>
+          <button type="button" class="secondary" id="closeCam">إغلاق</button>
+        </div>
+      </div>
+    </div>
+  </dialog>
+
   <!-- منطقة إنشاء تقرير الطباعة / PDF -->
   <div id="printContainer" aria-hidden="true"></div>
 
@@ -291,7 +360,7 @@
   const LS_KEY = 'furnitureLedgerV1';
   const currency = 'د.أ';
 
-  // عناصر DOM
+  // عناصر DOM أساسية
   const datePicker = document.getElementById('datePicker');
   const weekdayEl = document.getElementById('weekday');
   const prevDayBtn = document.getElementById('prevDay');
@@ -311,10 +380,13 @@
   const collapseAll = document.getElementById('collapseAll');
   const wipeAll = document.getElementById('wipeAll');
 
-  // مرفقات + OCR
+  // المرفقات + OCR + كاميرا
   const filesInput = document.getElementById('files');
   const filesPreview = document.getElementById('filesPreview');
   const ocrBtn = document.getElementById('ocrBtn');
+  const camBtn = document.getElementById('camBtn');
+
+  // نافذة المرفقات
   const attDialog = document.getElementById('attDialog');
   const attBody = document.getElementById('attBody');
   const attClose = document.getElementById('attClose');
@@ -330,7 +402,6 @@
 
   // حوار التحرير
   const editDialog = document.getElementById('editDialog');
-  const editForm = document.getElementById('editForm');
   const editId = document.getElementById('editId');
   const editType = document.getElementById('editType');
   const editAmount = document.getElementById('editAmount');
@@ -339,11 +410,30 @@
   const editDate = document.getElementById('editDate');
   const editTime = document.getElementById('editTime');
   const editDateKey = document.getElementById('editDateKey');
+  const editOldAtt = document.getElementById('editOldAtt');
+  const editFiles = document.getElementById('editFiles');
+  const editFilesPreview = document.getElementById('editFilesPreview');
+  const editCamBtn = document.getElementById('editCamBtn');
+
+  // حوار الكاميرا
+  const cameraDialog = document.getElementById('cameraDialog');
+  const camVideo = document.getElementById('camVideo');
+  const camCanvas = document.getElementById('camCanvas');
+  const shootBtn = document.getElementById('shootBtn');
+  const retakeBtn = document.getElementById('retakeBtn');
+  const usePhotoBtn = document.getElementById('usePhotoBtn');
+  const closeCamBtn = document.getElementById('closeCam');
+  const torchBtn = document.getElementById('torchBtn');
+  const flipBtn = document.getElementById('flipBtn');
+  const rotateBtn = document.getElementById('rotateBtn');
+  const modeAuto = document.getElementById('modeAuto');
+  const modeColor = document.getElementById('modeColor');
+  const modeBW = document.getElementById('modeBW');
 
   const printContainer = document.getElementById('printContainer');
   const toastEl = document.getElementById('toast');
 
-  // أدوات وقت/تاريخ
+  // وقت/تاريخ
   const toKey = (d) => {
     const dt = new Date(d.getTime());
     dt.setHours(0,0,0,0);
@@ -400,7 +490,7 @@
     return txDel(db,'attachments', id);
   }
 
-  // ضغط الصور قبل الحفظ
+  // ضغط/تجهيز الصور
   async function fileToImage(file){
     return new Promise((res,rej)=>{
       const fr = new FileReader();
@@ -414,15 +504,156 @@
       fr.readAsDataURL(file);
     });
   }
-  async function compressImage(file, maxSide=1600, quality=0.8){
-    const img = await fileToImage(file);
-    const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
+  function dataURLToBlob(dataURL){
+    const parts = dataURL.split(','), mime = parts[0].match(/:(.*?);/)[1];
+    const bin = atob(parts[1]); const len = bin.length; const u8 = new Uint8Array(len);
+    for(let i=0;i<len;i++) u8[i]=bin.charCodeAt(i);
+    return new Blob([u8], {type:mime});
+  }
+  async function compressImage(fileOrBlob, maxSide=1600, quality=0.9){
+    const src = (fileOrBlob instanceof Blob && !(fileOrBlob instanceof File)) ? URL.createObjectURL(fileOrBlob) : null;
+    const img = await (src ? new Promise((res,rej)=>{ const im=new Image(); im.onload=()=>res(im); im.onerror=rej; im.src=src; }) : fileToImage(fileOrBlob));
+    const w = img.width, h = img.height, scale = Math.min(1, maxSide / Math.max(w, h));
     const canvas = document.createElement('canvas');
-    canvas.width = Math.round(img.width * scale);
-    canvas.height = Math.round(img.height * scale);
+    canvas.width = Math.round(w * scale);
+    canvas.height = Math.round(h * scale);
     const ctx = canvas.getContext('2d');
     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-    return new Promise(r=> canvas.toBlob(r, 'image/jpeg', quality));
+    const blob = await new Promise(r=> canvas.toBlob(b=> r(b || dataURLToBlob(canvas.toDataURL('image/jpeg', quality))), 'image/jpeg', quality));
+    if(src) URL.revokeObjectURL(src);
+    return blob;
+  }
+
+  // فلاتر تحسين للمسح
+  function enhanceCanvas(canvas, mode='auto', rotateSteps=0){
+    const ctx = canvas.getContext('2d');
+    if(rotateSteps){
+      const tmp = document.createElement('canvas');
+      tmp.width = canvas.width; tmp.height = canvas.height;
+      tmp.getContext('2d').drawImage(canvas,0,0);
+      if(rotateSteps % 4 !==0){
+        const turns = ((rotateSteps%4)+4)%4;
+        if(turns === 1 || turns === 3){
+          canvas.width = tmp.height; canvas.height = tmp.width;
+        }
+        const c = canvas.getContext('2d');
+        c.save();
+        c.translate(canvas.width/2, canvas.height/2);
+        c.rotate(turns*Math.PI/2);
+        c.drawImage(tmp, -tmp.width/2, -tmp.height/2);
+        c.restore();
+      }
+    }
+    const {width:w, height:h} = canvas;
+    const imageData = ctx.getImageData(0,0,w,h);
+    const d = imageData.data;
+
+    // حساب إضاءة أساسية
+    let sum=0, sum2=0;
+    for(let i=0;i<d.length;i+=4){
+      const lum = 0.2126*d[i] + 0.7152*d[i+1] + 0.0722*d[i+2];
+      sum += lum; sum2 += lum*lum;
+    }
+    const n = d.length/4;
+    const mean = sum/n, std = Math.sqrt(Math.max(1, sum2/n - mean*mean));
+    const targetStd = 70; // تباين مستهدف
+    const k = std ? targetStd/std : 1;
+
+    for(let i=0;i<d.length;i+=4){
+      let r=d[i], g=d[i+1], b=d[i+2];
+      const lum = 0.2126*r + 0.7152*g + 0.0722*b;
+      let nl = (lum - mean)*k + mean; // توسيع المجال
+      nl = Math.max(0, Math.min(255, nl));
+
+      if(mode==='bw'){
+        const v = nl>140 ? 255 : (nl<110 ? 0 : nl); // عتبة بسيطة
+        d[i]=d[i+1]=d[i+2]=v;
+      } else if(mode==='color'){
+        // تصحيح بسيط: رفع التشبع الخفيف
+        const scale = lum ? nl/lum : 1;
+        d[i]   = Math.max(0, Math.min(255, r*scale));
+        d[i+1] = Math.max(0, Math.min(255, g*scale));
+        d[i+2] = Math.max(0, Math.min(255, b*scale));
+      } else {
+        // auto: خليط أبيض وأسود خفيف مع لون
+        const scale = lum ? nl/lum : 1;
+        r = r*scale; g=g*scale; b=b*scale;
+        const gray = nl;
+        // مزج 30% تدرج رمادي لإزالة صبغات
+        d[i]   = 0.7*r + 0.3*gray;
+        d[i+1] = 0.7*g + 0.3*gray;
+        d[i+2] = 0.7*b + 0.3*gray;
+      }
+      // تقليل الضوضاء الطفيفة: قص القيم
+      d[i] = d[i]<2?0:d[i]>253?255:d[i];
+      d[i+1] = d[i+1]<2?0:d[i+1]>253?255:d[i+1];
+      d[i+2] = d[i+2]<2?0:d[i+2]>253?255:d[i+2];
+    }
+    ctx.putImageData(imageData,0,0);
+    // Unsharp mask بسيط
+    boxBlur(canvas, 2);
+    const sharp = ctx.getImageData(0,0,w,h);
+    const s = sharp.data;
+    const amt = 0.4;
+    for(let i=0;i<d.length;i+=4){
+      d[i]   = clamp255(d[i]   + amt*(d[i]   - s[i]));
+      d[i+1] = clamp255(d[i+1] + amt*(d[i+1] - s[i+1]));
+      d[i+2] = clamp255(d[i+2] + amt*(d[i+2] - s[i+2]));
+    }
+    ctx.putImageData(imageData,0,0);
+  }
+  function clamp255(x){ return x<0?0:(x>255?255:x); }
+  function boxBlur(canvas, r){
+    const ctx = canvas.getContext('2d');
+    const {width:w,height:h} = canvas;
+    const img = ctx.getImageData(0,0,w,h);
+    const d = img.data;
+    const out = new Uint8ClampedArray(d.length);
+    const tmp = new Uint8ClampedArray(d.length);
+
+    // أفقي
+    for(let y=0;y<h;y++){
+      let rsum=0, gsum=0, bsum=0, asum=0;
+      let i = y*w*4;
+      for(let x=-r;x<=r;x++){
+        const xi = Math.max(0, Math.min(w-1, x));
+        const idx = (y*w + xi)*4;
+        rsum+=d[idx]; gsum+=d[idx+1]; bsum+=d[idx+2]; asum+=d[idx+3];
+      }
+      for(let x=0;x<w;x++){
+        const idx = (y*w + x)*4;
+        tmp[idx]   = rsum/(2*r+1);
+        tmp[idx+1] = gsum/(2*r+1);
+        tmp[idx+2] = bsum/(2*r+1);
+        tmp[idx+3] = asum/(2*r+1);
+        const x1 = Math.max(0, x-r);
+        const x2 = Math.min(w-1, x+r+1);
+        const i1=(y*w + x1)*4, i2=(y*w + x2)*4;
+        rsum += d[i2]-d[i1]; gsum += d[i2+1]-d[i1+1]; bsum += d[i2+2]-d[i1+2]; asum += d[i2+3]-d[i1+3];
+      }
+    }
+    // عمودي
+    for(let x=0;x<w;x++){
+      let rsum=0, gsum=0, bsum=0, asum=0;
+      for(let y=-r;y<=r;y++){
+        const yi = Math.max(0, Math.min(h-1, y));
+        const idx = (yi*w + x)*4;
+        rsum+=tmp[idx]; gsum+=tmp[idx+1]; bsum+=tmp[idx+2]; asum+=tmp[idx+3];
+      }
+      for(let y=0;y<h;y++){
+        const idx = (y*w + x)*4;
+        out[idx]   = rsum/(2*r+1);
+        out[idx+1] = gsum/(2*r+1);
+        out[idx+2] = bsum/(2*r+1);
+        out[idx+3] = asum/(2*r+1);
+        const y1 = Math.max(0, y-r);
+        const y2 = Math.min(h-1, y+r+1);
+        const i1=(y1*w + x)*4, i2=(y2*w + x)*4;
+        rsum += tmp[i2]-tmp[i1]; gsum += tmp[i2+1]-tmp[i1+1]; bsum += tmp[i2+2]-tmp[i1+2]; asum += tmp[i2+3]-tmp[i1+3];
+      }
+    }
+    for(let i=0;i<d.length;i++) d[i]=out[i];
+    ctx.putImageData(img,0,0);
   }
 
   // Toast
@@ -432,7 +663,7 @@
     setTimeout(()=> toastEl.classList.remove('show'), 1600);
   }
 
-  // تهيئة حقول الوقت والتاريخ
+  // تاريخ افتراضي
   const initDateControls = () => {
     datePicker.value = selected;
     dateInput.value = selected;
@@ -440,7 +671,7 @@
     weekdayEl.textContent = weekdayName(fromKey(selected));
   };
 
-  // عمليات CRUD (تدعم attachments)
+  // CRUD (يدعم attachments)
   const addEntry = ({dateKey, kind, amount, title, note, time, attachments}) => {
     const id = cryptoRandomId();
     const createdAt = Date.now();
@@ -448,19 +679,19 @@
     state.days[dateKey].push({ id, kind, amount, title, note, time, createdAt, attachments: attachments||[] });
     save(state);
   };
-  const updateEntry = ({oldDateKey, id, dateKey, kind, amount, title, note, time}) => {
+  const updateEntry = ({oldDateKey, id, dateKey, kind, amount, title, note, time, attachments}) => {
     const list = state.days[oldDateKey] || [];
     const idx = list.findIndex(x => x.id === id);
     if(idx === -1) return;
     const item = list[idx];
-    // نقل ليوم مختلف؟
+    const updated = { ...item, kind, amount, title, note, time, attachments: Array.isArray(attachments) ? attachments : (item.attachments||[]) };
     if(oldDateKey !== dateKey){
       list.splice(idx,1);
       if(!state.days[dateKey]) state.days[dateKey] = [];
-      state.days[dateKey].push({ ...item, kind, amount, title, note, time });
+      state.days[dateKey].push(updated);
       if(list.length === 0) delete state.days[oldDateKey];
     } else {
-      list[idx] = { ...item, kind, amount, title, note, time };
+      list[idx] = updated;
     }
     save(state);
   };
@@ -471,7 +702,6 @@
     const [removed] = list.splice(idx,1);
     if(list.length === 0) delete state.days[dateKey];
     save(state);
-    // حذف مرفقات العملية من IndexedDB
     if(removed && removed.attachments){
       for(const aid of removed.attachments){ try{ await deleteAttachment(aid); }catch{} }
     }
@@ -485,7 +715,7 @@
     return Math.random().toString(16).slice(2)+Date.now().toString(16);
   }
 
-  // عرض اليوم (مع شارة المرفقات)
+  // عرض اليوم
   const renderDay = (dateKey) => {
     const list = (state.days[dateKey] || []).slice().sort((a,b)=> a.createdAt - b.createdAt);
     dayList.innerHTML = '';
@@ -521,7 +751,6 @@
         dayList.appendChild(row);
       });
     }
-    // ملخص
     const totalIn = list.filter(x=>x.kind==='in').reduce((s,x)=>s + Number(x.amount||0),0);
     const totalOut = list.filter(x=>x.kind==='out').reduce((s,x)=>s + Number(x.amount||0),0);
     sumIn.textContent = `${numFmt.format(totalIn)} ${currency}`;
@@ -529,9 +758,9 @@
     sumNet.textContent = `${numFmt.format(totalIn - totalOut)} ${currency}`;
   };
 
-  // الأرشيف (كل الأيام)
+  // الأرشيف
   const renderHistory = () => {
-    const keys = Object.keys(state.days).sort((a,b)=> b.localeCompare(a)); // الأحدث أولًا
+    const keys = Object.keys(state.days).sort((a,b)=> b.localeCompare(a));
     historyEl.innerHTML = '';
     if(keys.length === 0){
       historyEl.innerHTML = '<div class="empty">لا توجد بيانات محفوظة بعد.</div>';
@@ -579,20 +808,21 @@
   // أدوات مساعدة
   function escapeHtml(str){ return String(str).replace(/[&<>"]/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[s])); }
 
-  // ****** مرفقات: معالجة الإدخال والمعاينة ******
+  // ****** مرفقات: إدخال ومعاينة ******
   let pendingAtt = []; // {blob, url}
-  function addThumb(url){
+  function addThumb(url, container, onRemove){
     const div=document.createElement('div'); div.className='thumb';
-    div.innerHTML = `<img src="${url}" alt="صورة فاتورة"><button class="x" title="إزالة">×</button>`;
+    div.innerHTML = `<img src="${url}" alt="صورة"><button class="x" title="إزالة">×</button>`;
     div.querySelector('.x').onclick=()=>{
-      const idx = pendingAtt.findIndex(p=>p.url===url);
-      if(idx>-1){ URL.revokeObjectURL(pendingAtt[idx].url); pendingAtt.splice(idx,1); }
+      onRemove?.();
       div.remove();
     };
-    filesPreview.appendChild(div);
+    container.appendChild(div);
   }
 
   filesInput?.addEventListener('change', async ()=>{
+    // فرّغ السابقة
+    pendingAtt.forEach(p=>{ try{ URL.revokeObjectURL(p.url); }catch{} });
     pendingAtt=[]; filesPreview.innerHTML='';
     if(!filesInput.files || !filesInput.files.length) return;
     if(!('indexedDB' in window)){ toast('متصفحك لا يدعم المرفقات؛ تم تعطيلها'); filesInput.value=''; return; }
@@ -602,34 +832,35 @@
       if(!file.type.startsWith('image/')) continue;
       if(count >= MAX_FILES){ toast('تم الوصول للحد الأقصى للمرفقات'); break; }
       try{
-        const blob = await compressImage(file, 1600, 0.8);
+        const blob = await compressImage(file, 1600, 0.9);
         const url = URL.createObjectURL(blob);
+        const idx = pendingAtt.length;
         pendingAtt.push({blob, url});
-        addThumb(url);
+        addThumb(url, filesPreview, ()=>{
+          URL.revokeObjectURL(pendingAtt[idx]?.url);
+          pendingAtt[idx]=null;
+        });
         count++;
-      }catch{ /* تجاهل صورة تالفة */ }
+      }catch{}
     }
+    pendingAtt = pendingAtt.filter(Boolean);
   });
 
-  // OCR: قراءة الفاتورة (اختياري)
+  // OCR
   ocrBtn?.addEventListener('click', async ()=>{
     try{
       if(!window.Tesseract){ alert('OCR غير متاح حالياً'); return; }
-      if(pendingAtt.length===0){ toast('أضف صورة فاتورة أولاً'); return; }
+      if(pendingAtt.length===0){ toast('أضف/التقط صورة فاتورة أولاً'); return; }
       const blob = pendingAtt[0].blob;
       const { data } = await Tesseract.recognize(blob, 'ara+eng', { logger:m=>console.log(m) });
       const text = (data.text || '').replace(/\s+/g,' ').trim();
 
-      // مبلغ: يلتقط 1234.56 أو 1,234.56 أو 1234
       const amtMatch  = text.match(/(\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{2})?|\d+(?:[.,]\d{2})?)/);
-      // تاريخ: 2025-01-31 أو 31/01/2025 ونحوها
       const dateMatch = text.match(/(\d{4}[\/\-\.]\d{1,2}[\/\-\.]\d{1,2}|\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4})/);
 
       if(amtMatch && !amount.value){
         let norm = amtMatch[1].replace(/\s/g,'');
-        // أزل الفواصل الآلاف
         if(/,\d{3}/.test(norm)) norm = norm.replace(/,/g,'');
-        // استبدل الفاصلة العشرية بنقطة إن لزم
         const parts = norm.split(',');
         if(parts.length===2 && !parts[1].includes('.')) norm = parts[0]+'.'+parts[1];
         amount.value = norm;
@@ -639,7 +870,7 @@
         if(norm) dateInput.value = norm;
       }
       if(!note.value) note.value = 'OCR';
-      toast('تمت قراءة الفاتورة مبدئيًا — راجع القيم قبل الحفظ');
+      toast('تمت قراءة الفاتورة مبدئيًا — راجع قبل الحفظ');
     }catch(err){
       console.error(err);
       toast('تعذر قراءة الفاتورة');
@@ -682,7 +913,7 @@
     datePicker.value = selected; dateInput.value = selected; weekdayEl.textContent = weekdayName(d); renderDay(selected);
   }
 
-  // حفظ عملية جديدة (مع تخزين المرفقات في IndexedDB)
+  // حفظ عملية جديدة (مع المرفقات)
   form.addEventListener('submit', async (e)=>{
     e.preventDefault();
     const kind = type.value;
@@ -696,14 +927,13 @@
     if(!ttl){ toast('الرجاء كتابة اسم القطعة أو الشخص'); return; }
     if(!tm){ tm = new Date().toTimeString().slice(0,5); }
 
-    // خزّن المرفقات
     const attIds = [];
     if(pendingAtt.length){
       if(!('indexedDB' in window)){ toast('متصفحك لا يدعم المرفقات؛ تم تجاهلها'); }
       else {
         for(const p of pendingAtt){
           try{ const id = await putAttachment(p.blob); attIds.push(id); }
-          catch{ /* تجاهل فشل صورة */ }
+          catch{}
           finally{ URL.revokeObjectURL(p.url); }
         }
       }
@@ -726,7 +956,7 @@
     const btn = e.target.closest('button');
     if(!btn) return;
     const act = btn.dataset.act;
-    const row = btn.closest('item, .item');
+    const row = btn.closest('.item');
     const id = row?.dataset.id;
     const dateKey = row?.dataset.dateKey;
     if(!id || !dateKey) return;
@@ -740,17 +970,7 @@
       }
     }
     if(act === 'edit'){
-      const item = (state.days[dateKey]||[]).find(x=>x.id===id);
-      if(!item) return;
-      editId.value = id;
-      editDateKey.value = dateKey;
-      editType.value = item.kind;
-      editAmount.value = item.amount;
-      editTitle.value = item.title || '';
-      editNote.value = item.note || '';
-      editDate.value = dateKey;
-      editTime.value = item.time || '';
-      editDialog.showModal();
+      openEditDialog(dateKey, id);
     }
     if(act === 'att'){
       const item = (state.days[dateKey]||[]).find(x=>x.id===id);
@@ -758,8 +978,92 @@
     }
   });
 
-  document.getElementById('cancelEdit').addEventListener('click', ()=> editDialog.close());
-  document.getElementById('saveEdit').addEventListener('click', ()=>{
+  // فتح نافذة التعديل مع مرفقات
+  let editPendingAtt = [];     // مرفقات جديدة {blob, url}
+  let editDeleteIds  = new Set(); // معرفات مرفقات قديمة للحذف
+  let editOldUrlMap  = new Map(); // id -> blobURL
+
+  async function openEditDialog(dateKey, id){
+    const item = (state.days[dateKey]||[]).find(x=>x.id===id);
+    if(!item) return;
+    // حقول أساسية
+    editId.value = id;
+    editDateKey.value = dateKey;
+    editType.value = item.kind;
+    editAmount.value = item.amount;
+    editTitle.value = item.title || '';
+    editNote.value = item.note || '';
+    editDate.value = dateKey;
+    editTime.value = item.time || '';
+
+    // نظّف حالة المرفقات
+    cleanupEditDialog();
+
+    // اعرض المرفقات الحالية
+    const ids = item.attachments || [];
+    for(const aid of ids){
+      try{
+        const blob = await getAttachment(aid);
+        if(!blob) continue;
+        const url = URL.createObjectURL(blob);
+        editOldUrlMap.set(aid, url);
+        const div=document.createElement('div'); div.className='thumb';
+        div.innerHTML = `<img src="${url}" alt="مرفق"><button class="x" title="حذف">×</button>`;
+        div.querySelector('.x').onclick=()=>{
+          editDeleteIds.add(aid);
+          div.remove();
+        };
+        editOldAtt.appendChild(div);
+      }catch{}
+    }
+
+    editDialog.showModal();
+  }
+
+  function cleanupEditDialog(){
+    editOldUrlMap.forEach(url=> URL.revokeObjectURL(url));
+    editOldUrlMap.clear();
+    editPendingAtt.forEach(p=>{ try{ URL.revokeObjectURL(p.url); }catch{} });
+    editPendingAtt = [];
+    editDeleteIds.clear();
+    editOldAtt.innerHTML = '';
+    editFilesPreview.innerHTML = '';
+    editFiles.value = '';
+  }
+
+  // اختيار مرفقات جديدة في التعديل
+  editFiles?.addEventListener('change', async ()=>{
+    editFilesPreview.innerHTML='';
+    editPendingAtt.forEach(p=>{ try{ URL.revokeObjectURL(p.url); }catch{} });
+    editPendingAtt = [];
+    if(!editFiles.files || !editFiles.files.length) return;
+    if(!('indexedDB' in window)){ toast('متصفحك لا يدعم المرفقات'); editFiles.value=''; return; }
+    const MAX_FILES = 6;
+    let count = 0;
+    for (const file of editFiles.files) {
+      if(!file.type.startsWith('image/')) continue;
+      if(count >= MAX_FILES){ toast('تم الوصول للحد الأقصى للمرفقات'); break; }
+      try{
+        const blob = await compressImage(file, 1600, 0.9);
+        const url = URL.createObjectURL(blob);
+        const idx = editPendingAtt.length;
+        editPendingAtt.push({blob, url});
+        addThumb(url, editFilesPreview, ()=>{
+          URL.revokeObjectURL(editPendingAtt[idx]?.url);
+          editPendingAtt[idx]=null;
+        });
+        count++;
+      }catch{}
+    }
+    editPendingAtt = editPendingAtt.filter(Boolean);
+  });
+
+  document.getElementById('cancelEdit').addEventListener('click', ()=>{
+    cleanupEditDialog();
+    editDialog.close();
+  });
+
+  document.getElementById('saveEdit').addEventListener('click', async ()=>{
     const id = editId.value;
     const oldDateKey = editDateKey.value;
     const newDateKey = editDate.value || oldDateKey;
@@ -772,8 +1076,23 @@
     if(!Number.isFinite(amt) || amt <= 0){ toast('المبلغ غير صالح'); return; }
     if(!ttl){ toast('يجب إدخال العنصر/الشخص'); return; }
 
-    updateEntry({oldDateKey, id, dateKey:newDateKey, kind, amount:amt, title:ttl, note:nt, time:tm});
+    const curItem = (state.days[oldDateKey]||[]).find(x=>x.id===id) || {};
+    const currentIds = Array.isArray(curItem.attachments) ? curItem.attachments.slice() : [];
+    const keepIds = currentIds.filter(aid=> !editDeleteIds.has(aid));
+
+    const newIds = [];
+    for(const p of editPendingAtt){
+      try{ const nid = await putAttachment(p.blob); newIds.push(nid); }catch{}
+    }
+    const finalAttachments = keepIds.concat(newIds);
+
+    updateEntry({oldDateKey, id, dateKey:newDateKey, kind, amount:amt, title:ttl, note:nt, time:tm, attachments: finalAttachments});
+
+    for(const aid of editDeleteIds){ try{ await deleteAttachment(aid); }catch{} }
+
+    cleanupEditDialog();
     editDialog.close();
+
     if(newDateKey === selected || oldDateKey === selected){ renderDay(selected); }
     renderHistory();
     toast('تم الحفظ');
@@ -796,10 +1115,9 @@
   expandAll.addEventListener('click', ()=>{ historyEl.querySelectorAll('details').forEach(d=> d.open = true); });
   collapseAll.addEventListener('click', ()=>{ historyEl.querySelectorAll('details').forEach(d=> d.open = false); });
 
-  // حذف جميع البيانات (مع المرفقات)
+  // حذف جميع البيانات
   wipeAll.addEventListener('click', async ()=>{
     if(confirm('تحذير: سيتم حذف كل البيانات نهائيًا. هل أنت متأكد؟')){
-      // امسح المرفقات من IndexedDB
       try{
         const db = await dbPromise;
         if(db){
@@ -816,12 +1134,12 @@
     }
   });
 
-  // PDF: إنشاء تقرير اليوم
+  // PDF: إنشاء تقرير اليوم — المرفقات داخل الصفوف
   pdfAllBtn.addEventListener('click', ()=> exportPDF('all'));
   pdfInBtn.addEventListener('click',  ()=> exportPDF('in'));
   pdfOutBtn.addEventListener('click', ()=> exportPDF('out'));
 
-  function exportPDF(mode){
+  async function exportPDF(mode){
     const dateKey = selected;
     const listAll = (state.days[dateKey] || []).slice().sort((a,b)=> a.createdAt - b.createdAt);
     const list = mode==='all' ? listAll : listAll.filter(x=> x.kind === mode);
@@ -830,24 +1148,40 @@
     const ttlIn = listAll.filter(x=>x.kind==='in').reduce((s,x)=>s + Number(x.amount||0),0);
     const ttlOut = listAll.filter(x=>x.kind==='out').reduce((s,x)=>s + Number(x.amount||0),0);
     const netAll = ttlIn - ttlOut;
-
     const label = mode==='all' ? 'تقرير اليوم (الكل)' : (mode==='in' ? 'تقرير واردات اليوم' : 'تقرير صادرات اليوم');
-
     const oldTitle = document.title;
     document.title = `${label} - ${dateKey}`;
 
-    const rows = list.map((it, idx) => `
-      <tr>
-        <td>${idx+1}</td>
-        ${mode==='all' ? `<td>${it.kind==='in'?'وارد':'صادر'}</td>` : ``}
-        <td>${escapeHtml(it.time || '--:--')}</td>
-        <td>${escapeHtml(it.title || '')}</td>
-        <td>${escapeHtml(it.note || '')}</td>
-        <td style="text-align:left">${numFmt.format(Number(it.amount||0))} ${currency}</td>
-      </tr>
-    `).join('');
+    const attUrlsForPrint = [];
+    const rows = (await Promise.all(list.map(async (it, idx)=>{
+      const rowNo = idx+1;
+      const ids = it.attachments || [];
+      const thumbs = [];
+      for(const aid of ids){
+        try{
+          const blob = await getAttachment(aid);
+          if(!blob) continue;
+          const url = URL.createObjectURL(blob);
+          attUrlsForPrint.push(url);
+          thumbs.push(`<div class="p-thumb"><img src="${url}" alt="مرفق ${rowNo}"><span>#${rowNo}</span></div>`);
+        }catch{}
+      }
+      const attCell = thumbs.length ? `<div class="p-cell-att">${thumbs.join('')}</div>` : '—';
+      return `
+        <tr>
+          <td>${rowNo}</td>
+          ${mode==='all' ? `<td>${it.kind==='in'?'وارد':'صادر'}</td>` : ``}
+          <td>${escapeHtml(it.time || '--:--')}</td>
+          <td>${escapeHtml(it.title || '')}</td>
+          <td>${escapeHtml(it.note || '')}</td>
+          <td style="text-align:left">${numFmt.format(Number(it.amount||0))} ${currency}</td>
+          <td>${attCell}</td>
+        </tr>
+      `;
+    }))).join('');
 
     const sumMode = list.reduce((s,x)=> s + Number(x.amount||0), 0);
+    const tableCols = (mode==='all' ? 7 : 6);
 
     printContainer.innerHTML = `
       <div class="report">
@@ -879,12 +1213,13 @@
               <th>العنصر/الشخص</th>
               <th>ملاحظة</th>
               <th>المبلغ</th>
+              <th>المرفقات</th>
             </tr>
           </thead>
           <tbody>${rows}</tbody>
           <tfoot>
             <tr>
-              <th colspan="${mode==='all' ? 5 : 4}" style="text-align:start">الإجمالي</th>
+              <th colspan="${tableCols-1}" style="text-align:start">الإجمالي</th>
               <th style="text-align:left">${numFmt.format(sumMode)} ${currency}</th>
             </tr>
           </tfoot>
@@ -897,7 +1232,18 @@
       </div>
     `;
 
-    const after = ()=>{ document.title = oldTitle; window.removeEventListener('afterprint', after); };
+    const imgs = Array.from(printContainer.querySelectorAll('img'));
+    if(imgs.length){
+      try{
+        await Promise.all(imgs.map(img => img.decode ? img.decode().catch(()=>{}) : new Promise(r=>{ img.onload=img.onerror=()=>r(); })));
+      }catch{}
+    }
+
+    const after = ()=>{
+      document.title = oldTitle;
+      attUrlsForPrint.forEach(u=> URL.revokeObjectURL(u));
+      window.removeEventListener('afterprint', after);
+    };
     window.addEventListener('afterprint', after);
     setTimeout(()=> window.print(), 20);
   }
@@ -927,6 +1273,208 @@
     attTempUrls=[];
   });
 
+  // ***************** الكاميرا: ماسح المستند *****************
+  let camStream = null;
+  let currentDeviceId = null;
+  let useMode = 'auto'; // auto|color|bw
+  let rotateSteps = 0;
+  let captureTarget = 'add'; // 'add' أو 'edit' (من أي زر فتحنا الكاميرا)
+
+  function setModeBtn(active){
+    [modeAuto, modeColor, modeBW].forEach(b=> b.classList.remove('active'));
+    if(active==='auto') modeAuto.classList.add('active');
+    if(active==='color') modeColor.classList.add('active');
+    if(active==='bw') modeBW.classList.add('active');
+    useMode = active;
+  }
+  modeAuto?.addEventListener('click', ()=> setModeBtn('auto'));
+  modeColor?.addEventListener('click', ()=> setModeBtn('color'));
+  modeBW?.addEventListener('click', ()=> setModeBtn('bw'));
+
+  rotateBtn?.addEventListener('click', ()=>{
+    rotateSteps = (rotateSteps + 1) % 4;
+    toast('تم التدوير');
+  });
+
+  camBtn?.addEventListener('click', ()=> openCamera('add'));
+  editCamBtn?.addEventListener('click', ()=> openCamera('edit'));
+
+  async function openCamera(target){
+    if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+      toast('الكاميرا غير مدعومة في هذا المتصفح');
+      return;
+    }
+    captureTarget = target;
+    rotateSteps = 0;
+    setModeBtn('auto');
+
+    await startStream();
+    camCanvas.style.display='none';
+    camVideo.style.display='block';
+    shootBtn.style.display='';
+    retakeBtn.style.display='none';
+    usePhotoBtn.style.display='none';
+    try{ cameraDialog.showModal(); }catch{ /*Safari قد يرفض بدون gesture*/ }
+  }
+
+  async function startStream(deviceId){
+    stopStream();
+    const constraints = {
+      video: deviceId ? { deviceId: { exact: deviceId } } : {
+        facingMode: { ideal:'environment' },
+        width: { ideal:1920 }, height: { ideal:1080 }
+      },
+      audio:false
+    };
+    try{
+      camStream = await navigator.mediaDevices.getUserMedia(constraints);
+      camVideo.srcObject = camStream;
+      camVideo.play().catch(()=>{});
+      currentDeviceId = camStream.getVideoTracks()[0].getSettings().deviceId || null;
+      // عكس الفيديو إذا أمامي
+      const facing = camStream.getVideoTracks()[0].getSettings().facingMode || '';
+      camVideo.style.transform = (facing==='user') ? 'scaleX(-1)' : 'none';
+    }catch(err){
+      console.error(err);
+      toast('تعذر فتح الكاميرا');
+    }
+  }
+
+  function stopStream(){
+    try{
+      if(camStream){
+        camStream.getTracks().forEach(t=> t.stop());
+        camStream = null;
+      }
+    }catch{}
+  }
+
+  // تبديل الكاميرا
+  flipBtn?.addEventListener('click', async ()=>{
+    try{
+      const list = await navigator.mediaDevices.enumerateDevices();
+      const cams = list.filter(d=> d.kind==='videoinput');
+      if(!cams.length){ toast('لا توجد كاميرات أخرى'); return; }
+      if(!currentDeviceId){
+        await startStream(cams[0].deviceId);
+        return;
+      }
+      const idx = cams.findIndex(c=> c.deviceId===currentDeviceId);
+      const next = cams[(idx+1)%cams.length];
+      await startStream(next.deviceId);
+    }catch(err){
+      console.error(err); toast('تعذر التبديل');
+    }
+  });
+
+  // الفلاش / التورش (تبع الهاتف) إن مدعوم
+  let torchOn = false;
+  torchBtn?.addEventListener('click', async ()=>{
+    try{
+      if(!camStream){ toast('افتح الكاميرا أولاً'); return; }
+      const track = camStream.getVideoTracks()[0];
+      const capabilities = track.getCapabilities ? track.getCapabilities() : {};
+      if(!('torch' in capabilities)){ toast('الفلاش غير مدعوم على هذه الكاميرا'); return; }
+      torchOn = !torchOn;
+      await track.applyConstraints({ advanced:[{ torch: torchOn }] });
+      toast(torchOn ? 'تم تشغيل الإضاءة' : 'تم إيقاف الإضاءة');
+    }catch(err){
+      console.error(err);
+      toast('تعذر التحكم بالإضاءة');
+    }
+  });
+
+  // التقاط
+  shootBtn?.addEventListener('click', ()=>{
+    if(!camStream){ toast('الكاميرا غير مفعّلة'); return; }
+    const track = camStream.getVideoTracks()[0];
+    const settings = track.getSettings();
+    const vw = camVideo.videoWidth || settings.width || 1280;
+    const vh = camVideo.videoHeight || settings.height || 720;
+
+    // نزّل الدقة إلى حد أقصى مناسب للمعالجة
+    const maxSide = 1600;
+    const scale = Math.min(1, maxSide / Math.max(vw, vh));
+    camCanvas.width = Math.round(vw * scale);
+    camCanvas.height = Math.round(vh * scale);
+    const ctx = camCanvas.getContext('2d');
+    // إذا الكاميرا أمامية وكانت مقلوبة، عدّل الرسم
+    const facing = settings.facingMode || '';
+    ctx.save();
+    if(facing==='user'){
+      ctx.translate(camCanvas.width, 0);
+      ctx.scale(-1, 1);
+    }
+    ctx.drawImage(camVideo, 0, 0, camCanvas.width, camCanvas.height);
+    ctx.restore();
+
+    // تحسين
+    enhanceCanvas(camCanvas, useMode, rotateSteps);
+
+    camVideo.style.display='none';
+    camCanvas.style.display='block';
+    shootBtn.style.display='none';
+    retakeBtn.style.display='';
+    usePhotoBtn.style.display='';
+  });
+
+  // إعادة التصوير
+  retakeBtn?.addEventListener('click', ()=>{
+    camCanvas.style.display='none';
+    camVideo.style.display='block';
+    shootBtn.style.display='';
+    retakeBtn.style.display='none';
+    usePhotoBtn.style.display='none';
+  });
+
+  // استخدام الصورة
+  usePhotoBtn?.addEventListener('click', async ()=>{
+    try{
+      const blob = await new Promise(r=> camCanvas.toBlob(b=> r(b), 'image/jpeg', 0.9));
+      const finalBlob = await compressImage(blob, 1600, 0.9);
+      const url = URL.createObjectURL(finalBlob);
+
+      if(captureTarget==='add'){
+        const idx = pendingAtt.length;
+        pendingAtt.push({blob: finalBlob, url});
+        addThumb(url, filesPreview, ()=>{
+          try{ URL.revokeObjectURL(pendingAtt[idx]?.url); }catch{}
+          pendingAtt[idx] = null;
+        });
+        pendingAtt = pendingAtt.filter(Boolean);
+      } else {
+        const idx = editPendingAtt.length;
+        editPendingAtt.push({blob: finalBlob, url});
+        addThumb(url, editFilesPreview, ()=>{
+          try{ URL.revokeObjectURL(editPendingAtt[idx]?.url); }catch{}
+          editPendingAtt[idx] = null;
+        });
+        editPendingAtt = editPendingAtt.filter(Boolean);
+      }
+
+      toast('تم التقاط الصورة');
+      closeCameraDialog();
+    }catch(err){
+      console.error(err);
+      toast('تعذر حفظ الصورة');
+    }
+  });
+
+  // إغلاق
+  function closeCameraDialog(){
+    stopStream();
+    cameraDialog.close();
+    camCanvas.style.display='none';
+    camVideo.style.display='block';
+    shootBtn.style.display='';
+    retakeBtn.style.display='none';
+    usePhotoBtn.style.display='none';
+    rotateSteps = 0;
+    torchOn = false;
+  }
+  closeCamBtn?.addEventListener('click', closeCameraDialog);
+  cameraDialog?.addEventListener('close', ()=> stopStream());
+
   // تشغيل أولي
   (function boot(){
     selected = toKey(new Date());
@@ -936,8 +1484,14 @@
     if(!('indexedDB' in window)){
       filesInput?.setAttribute('disabled','');
       ocrBtn?.setAttribute('disabled','');
+      editFiles?.setAttribute('disabled','');
+    }
+    if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+      camBtn?.setAttribute('disabled','');
+      editCamBtn?.setAttribute('disabled','');
     }
   })();
+
 })();
 </script>
 </body>
