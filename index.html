@@ -110,28 +110,6 @@
       .p-thumb img{ width:100%; height:100%; object-fit:cover }
       .p-thumb span{ position:absolute; bottom:0; left:0; right:0; background:rgba(255,255,255,.85); color:#000; font-size:9px; text-align:center; line-height:1.2 }
     }
-
-    /* حوار الكاميرا (ماسح المستند) */
-    #cameraDialog{border:none;border-radius:16px;padding:0;max-width:720px;width:calc(100% - 24px);background:var(--panel);color:var(--text)}
-    #cameraDialog::backdrop{background:rgba(0,0,0,.62)}
-    .cam-h{padding:12px 16px;border-bottom:1px solid var(--border);font-weight:800}
-    .cam-b{padding:0}
-    .cam-f{padding:12px 16px;border-top:1px solid var(--border);display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
-    .cam-wrap{position:relative; background:#000}
-    #camVideo, #camCanvas{width:100%; height:auto; display:block}
-    .cam-overlay{
-      position:absolute; inset:0; pointer-events:none;
-      background:
-        linear-gradient(to right, rgba(255,255,255,.12) 1px, transparent 1px) 0 0/25% 100%,
-        linear-gradient(to bottom, rgba(255,255,255,.12) 1px, transparent 1px) 0 0/100% 25%;
-      outline:120px solid rgba(0,0,0,.25);
-    }
-    .cam-tip{position:absolute; bottom:8px; inset-inline:8px; background:rgba(0,0,0,.45); color:#fff; padding:6px 8px; border-radius:8px; font-size:12px}
-    .cam-ctrls{display:flex; justify-content:space-between; align-items:center; gap:8px; padding:8px 12px; border-top:1px solid var(--border)}
-    .cam-ctrls .left, .cam-ctrls .right{display:flex; gap:8px; align-items:center; flex-wrap:wrap}
-    .seg{display:inline-flex; border:1px solid var(--border); border-radius:10px; overflow:hidden}
-    .seg button{background:transparent; border:0; padding:8px 10px; color:var(--text); cursor:pointer}
-    .seg button.active{background:var(--primary); color:#fff}
   </style>
 </head>
 <body>
@@ -158,9 +136,9 @@
             <span class="chip" id="weekday"></span>
           </div>
           <div class="controls">
+            <button id="shareDay">📤 مشاركة اليوم</button>
             <button class="good" id="pdfAll" title="تصدير PDF لليوم (الكل)">PDF اليوم</button>
-            <button class="secondary" id="pdfIn" title="تصدير PDF واردات اليوم">PDF الواردات</button>
-            <button class="secondary" id="pdfOut" title="تصدير PDF صادرات اليوم">PDF الصادرات</button>
+            <!-- زرّي PDF للوارد/الصادر مخفيين حالياً -->
           </div>
         </div>
         <div class="b">
@@ -184,14 +162,6 @@
                 <label>المبلغ (د.أ)</label>
                 <input type="number" step="0.01" min="0" id="amount" placeholder="0.00" required />
               </div>
-              <div style="grid-column: span 3">
-                <label>التاريخ</label>
-                <input type="date" id="dateInput" required />
-              </div>
-              <div style="grid-column: span 3">
-                <label>الوقت</label>
-                <input type="time" id="timeInput" />
-              </div>
               <div style="grid-column: span 6">
                 <label>العنصر/الشخص</label>
                 <input type="text" id="title" placeholder="مثال: طقم كنبايات / دفعة من أحمد" required />
@@ -201,20 +171,18 @@
                 <input type="text" id="note" placeholder="تفاصيل إضافية (اختياري)" />
               </div>
 
-              <!-- المرفقات + OCR + كاميرا -->
+              <!-- المرفقات فقط -->
               <div style="grid-column: span 12">
                 <label>مرفقات الفاتورة (صور)</label>
                 <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center">
                   <input type="file" id="files" accept="image/*" multiple />
-                  <button type="button" id="camBtn" class="secondary" title="التقاط بالموبايل/الكاميرا">التقاط بالكاميرا</button>
-                  <button type="button" id="ocrBtn" class="secondary" title="قراءة الفاتورة تلقائيًا">OCR</button>
                 </div>
                 <div id="filesPreview" class="thumbs"></div>
               </div>
             </div>
-            <div class="col" style="grid-column: span 12; display:flex; gap:8px; margin-top:6px">
+            <div class="col" style="grid-column: span 12; display:flex; gap:8px; margin-top:6px; align-items:center">
               <button type="submit">إضافة للسجل</button>
-              <button type="reset" class="secondary">تفريغ</button>
+              <span class="chip" title="يؤخذ تلقائيًا من ساعة الجهاز واليوم المحدد">⏱️ التاريخ والوقت يتمّان تلقائيًا</span>
             </div>
           </form>
 
@@ -294,7 +262,6 @@
           <label>إضافة مرفقات جديدة</label>
           <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center">
             <input type="file" id="editFiles" accept="image/*" multiple />
-            <button type="button" id="editCamBtn" class="secondary">التقاط بالكاميرا</button>
           </div>
           <div id="editFilesPreview" class="thumbs"></div>
         </div>
@@ -315,52 +282,18 @@
     </div>
   </dialog>
 
-  <!-- حوار الكاميرا -->
-  <dialog id="cameraDialog" class="no-print">
-    <div class="cam-h">التقاط مستند بالكاميرا</div>
-    <div class="cam-b">
-      <div class="cam-wrap">
-        <video id="camVideo" playsinline autoplay></video>
-        <canvas id="camCanvas" style="display:none"></canvas>
-        <div class="cam-overlay"></div>
-        <div class="cam-tip">ضع الفاتورة داخل الإطار، ثبّت الجهاز وحاول تجنّب الظلال. استخدم الإضاءة عند الحاجة.</div>
-      </div>
-      <div class="cam-ctrls">
-        <div class="left">
-          <div class="seg" aria-label="وضع المسح">
-            <button type="button" data-mode="auto" class="active" id="modeAuto">تحسين</button>
-            <button type="button" data-mode="color" id="modeColor">ملون</button>
-            <button type="button" data-mode="bw" id="modeBW">أبيض وأسود</button>
-          </div>
-          <button type="button" class="secondary" id="rotateBtn" title="تدوير 90°">↻ تدوير</button>
-        </div>
-        <div class="right">
-          <button type="button" class="secondary" id="torchBtn" title="إضاءة">💡</button>
-          <button type="button" class="secondary" id="flipBtn" title="تبديل الكاميرا">🔄</button>
-          <button type="button" class="good" id="shootBtn" title="التقاط">● التقاط</button>
-          <button type="button" class="secondary" id="retakeBtn" style="display:none">إعادة</button>
-          <button type="button" id="usePhotoBtn" style="display:none">استخدام الصورة</button>
-          <button type="button" class="secondary" id="closeCam">إغلاق</button>
-        </div>
-      </div>
-    </div>
-  </dialog>
-
   <!-- منطقة إنشاء تقرير الطباعة / PDF -->
   <div id="printContainer" aria-hidden="true"></div>
 
   <!-- Toast -->
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-  <!-- Tesseract (OCR اختياري) -->
-  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4.0.2/dist/tesseract.min.js"></script>
-
 <script>
 (function(){
   const LS_KEY = 'furnitureLedgerV1';
   const currency = 'د.أ';
 
-  // عناصر DOM أساسية
+  // عناصر DOM
   const datePicker = document.getElementById('datePicker');
   const weekdayEl = document.getElementById('weekday');
   const prevDayBtn = document.getElementById('prevDay');
@@ -371,34 +304,31 @@
   const sumOut = document.getElementById('sumOut');
   const sumNet = document.getElementById('sumNet');
   const historyEl = document.getElementById('history');
+  const shareDayBtn = document.getElementById('shareDay');
 
   const pdfAllBtn = document.getElementById('pdfAll');
-  const pdfInBtn  = document.getElementById('pdfIn');
+  const pdfInBtn  = document.getElementById('pdfIn');   // قد يكونان غير موجودين
   const pdfOutBtn = document.getElementById('pdfOut');
 
   const expandAll = document.getElementById('expandAll');
   const collapseAll = document.getElementById('collapseAll');
   const wipeAll = document.getElementById('wipeAll');
 
-  // المرفقات + OCR + كاميرا
+  // المرفقات
   const filesInput = document.getElementById('files');
   const filesPreview = document.getElementById('filesPreview');
-  const ocrBtn = document.getElementById('ocrBtn');
-  const camBtn = document.getElementById('camBtn');
 
-  // نافذة المرفقات
+  // حوار المرفقات
   const attDialog = document.getElementById('attDialog');
   const attBody = document.getElementById('attBody');
   const attClose = document.getElementById('attClose');
 
-  // فورم الإضافة
+  // فورم الإضافة (بدون تاريخ/وقت)
   const form = document.getElementById('entryForm');
   const type = document.getElementById('type');
   const amount = document.getElementById('amount');
   const title = document.getElementById('title');
   const note = document.getElementById('note');
-  const dateInput = document.getElementById('dateInput');
-  const timeInput = document.getElementById('timeInput');
 
   // حوار التحرير
   const editDialog = document.getElementById('editDialog');
@@ -413,22 +343,6 @@
   const editOldAtt = document.getElementById('editOldAtt');
   const editFiles = document.getElementById('editFiles');
   const editFilesPreview = document.getElementById('editFilesPreview');
-  const editCamBtn = document.getElementById('editCamBtn');
-
-  // حوار الكاميرا
-  const cameraDialog = document.getElementById('cameraDialog');
-  const camVideo = document.getElementById('camVideo');
-  const camCanvas = document.getElementById('camCanvas');
-  const shootBtn = document.getElementById('shootBtn');
-  const retakeBtn = document.getElementById('retakeBtn');
-  const usePhotoBtn = document.getElementById('usePhotoBtn');
-  const closeCamBtn = document.getElementById('closeCam');
-  const torchBtn = document.getElementById('torchBtn');
-  const flipBtn = document.getElementById('flipBtn');
-  const rotateBtn = document.getElementById('rotateBtn');
-  const modeAuto = document.getElementById('modeAuto');
-  const modeColor = document.getElementById('modeColor');
-  const modeBW = document.getElementById('modeBW');
 
   const printContainer = document.getElementById('printContainer');
   const toastEl = document.getElementById('toast');
@@ -490,7 +404,7 @@
     return txDel(db,'attachments', id);
   }
 
-  // ضغط/تجهيز الصور
+  // تحويل/ضغط الصور
   async function fileToImage(file){
     return new Promise((res,rej)=>{
       const fr = new FileReader();
@@ -524,138 +438,6 @@
     return blob;
   }
 
-  // فلاتر تحسين للمسح
-  function enhanceCanvas(canvas, mode='auto', rotateSteps=0){
-    const ctx = canvas.getContext('2d');
-    if(rotateSteps){
-      const tmp = document.createElement('canvas');
-      tmp.width = canvas.width; tmp.height = canvas.height;
-      tmp.getContext('2d').drawImage(canvas,0,0);
-      if(rotateSteps % 4 !==0){
-        const turns = ((rotateSteps%4)+4)%4;
-        if(turns === 1 || turns === 3){
-          canvas.width = tmp.height; canvas.height = tmp.width;
-        }
-        const c = canvas.getContext('2d');
-        c.save();
-        c.translate(canvas.width/2, canvas.height/2);
-        c.rotate(turns*Math.PI/2);
-        c.drawImage(tmp, -tmp.width/2, -tmp.height/2);
-        c.restore();
-      }
-    }
-    const {width:w, height:h} = canvas;
-    const imageData = ctx.getImageData(0,0,w,h);
-    const d = imageData.data;
-
-    // حساب إضاءة أساسية
-    let sum=0, sum2=0;
-    for(let i=0;i<d.length;i+=4){
-      const lum = 0.2126*d[i] + 0.7152*d[i+1] + 0.0722*d[i+2];
-      sum += lum; sum2 += lum*lum;
-    }
-    const n = d.length/4;
-    const mean = sum/n, std = Math.sqrt(Math.max(1, sum2/n - mean*mean));
-    const targetStd = 70; // تباين مستهدف
-    const k = std ? targetStd/std : 1;
-
-    for(let i=0;i<d.length;i+=4){
-      let r=d[i], g=d[i+1], b=d[i+2];
-      const lum = 0.2126*r + 0.7152*g + 0.0722*b;
-      let nl = (lum - mean)*k + mean; // توسيع المجال
-      nl = Math.max(0, Math.min(255, nl));
-
-      if(mode==='bw'){
-        const v = nl>140 ? 255 : (nl<110 ? 0 : nl); // عتبة بسيطة
-        d[i]=d[i+1]=d[i+2]=v;
-      } else if(mode==='color'){
-        // تصحيح بسيط: رفع التشبع الخفيف
-        const scale = lum ? nl/lum : 1;
-        d[i]   = Math.max(0, Math.min(255, r*scale));
-        d[i+1] = Math.max(0, Math.min(255, g*scale));
-        d[i+2] = Math.max(0, Math.min(255, b*scale));
-      } else {
-        // auto: خليط أبيض وأسود خفيف مع لون
-        const scale = lum ? nl/lum : 1;
-        r = r*scale; g=g*scale; b=b*scale;
-        const gray = nl;
-        // مزج 30% تدرج رمادي لإزالة صبغات
-        d[i]   = 0.7*r + 0.3*gray;
-        d[i+1] = 0.7*g + 0.3*gray;
-        d[i+2] = 0.7*b + 0.3*gray;
-      }
-      // تقليل الضوضاء الطفيفة: قص القيم
-      d[i] = d[i]<2?0:d[i]>253?255:d[i];
-      d[i+1] = d[i+1]<2?0:d[i+1]>253?255:d[i+1];
-      d[i+2] = d[i+2]<2?0:d[i+2]>253?255:d[i+2];
-    }
-    ctx.putImageData(imageData,0,0);
-    // Unsharp mask بسيط
-    boxBlur(canvas, 2);
-    const sharp = ctx.getImageData(0,0,w,h);
-    const s = sharp.data;
-    const amt = 0.4;
-    for(let i=0;i<d.length;i+=4){
-      d[i]   = clamp255(d[i]   + amt*(d[i]   - s[i]));
-      d[i+1] = clamp255(d[i+1] + amt*(d[i+1] - s[i+1]));
-      d[i+2] = clamp255(d[i+2] + amt*(d[i+2] - s[i+2]));
-    }
-    ctx.putImageData(imageData,0,0);
-  }
-  function clamp255(x){ return x<0?0:(x>255?255:x); }
-  function boxBlur(canvas, r){
-    const ctx = canvas.getContext('2d');
-    const {width:w,height:h} = canvas;
-    const img = ctx.getImageData(0,0,w,h);
-    const d = img.data;
-    const out = new Uint8ClampedArray(d.length);
-    const tmp = new Uint8ClampedArray(d.length);
-
-    // أفقي
-    for(let y=0;y<h;y++){
-      let rsum=0, gsum=0, bsum=0, asum=0;
-      let i = y*w*4;
-      for(let x=-r;x<=r;x++){
-        const xi = Math.max(0, Math.min(w-1, x));
-        const idx = (y*w + xi)*4;
-        rsum+=d[idx]; gsum+=d[idx+1]; bsum+=d[idx+2]; asum+=d[idx+3];
-      }
-      for(let x=0;x<w;x++){
-        const idx = (y*w + x)*4;
-        tmp[idx]   = rsum/(2*r+1);
-        tmp[idx+1] = gsum/(2*r+1);
-        tmp[idx+2] = bsum/(2*r+1);
-        tmp[idx+3] = asum/(2*r+1);
-        const x1 = Math.max(0, x-r);
-        const x2 = Math.min(w-1, x+r+1);
-        const i1=(y*w + x1)*4, i2=(y*w + x2)*4;
-        rsum += d[i2]-d[i1]; gsum += d[i2+1]-d[i1+1]; bsum += d[i2+2]-d[i1+2]; asum += d[i2+3]-d[i1+3];
-      }
-    }
-    // عمودي
-    for(let x=0;x<w;x++){
-      let rsum=0, gsum=0, bsum=0, asum=0;
-      for(let y=-r;y<=r;y++){
-        const yi = Math.max(0, Math.min(h-1, y));
-        const idx = (yi*w + x)*4;
-        rsum+=tmp[idx]; gsum+=tmp[idx+1]; bsum+=tmp[idx+2]; asum+=tmp[idx+3];
-      }
-      for(let y=0;y<h;y++){
-        const idx = (y*w + x)*4;
-        out[idx]   = rsum/(2*r+1);
-        out[idx+1] = gsum/(2*r+1);
-        out[idx+2] = bsum/(2*r+1);
-        out[idx+3] = asum/(2*r+1);
-        const y1 = Math.max(0, y-r);
-        const y2 = Math.min(h-1, y+r+1);
-        const i1=(y1*w + x)*4, i2=(y2*w + x)*4;
-        rsum += tmp[i2]-tmp[i1]; gsum += tmp[i2+1]-tmp[i1+1]; bsum += tmp[i2+2]-tmp[i1+2]; asum += tmp[i2+3]-tmp[i1+3];
-      }
-    }
-    for(let i=0;i<d.length;i++) d[i]=out[i];
-    ctx.putImageData(img,0,0);
-  }
-
   // Toast
   function toast(msg){
     toastEl.textContent = msg;
@@ -666,12 +448,10 @@
   // تاريخ افتراضي
   const initDateControls = () => {
     datePicker.value = selected;
-    dateInput.value = selected;
-    timeInput.value = new Date().toTimeString().slice(0,5);
     weekdayEl.textContent = weekdayName(fromKey(selected));
   };
 
-  // CRUD (يدعم attachments)
+  // CRUD
   const addEntry = ({dateKey, kind, amount, title, note, time, attachments}) => {
     const id = cryptoRandomId();
     const createdAt = Date.now();
@@ -846,53 +626,9 @@
     pendingAtt = pendingAtt.filter(Boolean);
   });
 
-  // OCR
-  ocrBtn?.addEventListener('click', async ()=>{
-    try{
-      if(!window.Tesseract){ alert('OCR غير متاح حالياً'); return; }
-      if(pendingAtt.length===0){ toast('أضف/التقط صورة فاتورة أولاً'); return; }
-      const blob = pendingAtt[0].blob;
-      const { data } = await Tesseract.recognize(blob, 'ara+eng', { logger:m=>console.log(m) });
-      const text = (data.text || '').replace(/\s+/g,' ').trim();
-
-      const amtMatch  = text.match(/(\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{2})?|\d+(?:[.,]\d{2})?)/);
-      const dateMatch = text.match(/(\d{4}[\/\-\.]\d{1,2}[\/\-\.]\d{1,2}|\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4})/);
-
-      if(amtMatch && !amount.value){
-        let norm = amtMatch[1].replace(/\s/g,'');
-        if(/,\d{3}/.test(norm)) norm = norm.replace(/,/g,'');
-        const parts = norm.split(',');
-        if(parts.length===2 && !parts[1].includes('.')) norm = parts[0]+'.'+parts[1];
-        amount.value = norm;
-      }
-      if(dateMatch && !dateInput.value){
-        const norm = normalizeDate(dateMatch[1]);
-        if(norm) dateInput.value = norm;
-      }
-      if(!note.value) note.value = 'OCR';
-      toast('تمت قراءة الفاتورة مبدئيًا — راجع قبل الحفظ');
-    }catch(err){
-      console.error(err);
-      toast('تعذر قراءة الفاتورة');
-    }
-  });
-
-  function normalizeDate(raw){
-    const s = raw.replace(/\./g,'/').replace(/-/g,'/');
-    const parts = s.split('/');
-    if(parts.length!==3) return null;
-    let y,m,d;
-    if(parts[0].length===4){ y=+parts[0]; m=+parts[1]; d=+parts[2]; }
-    else { d=+parts[0]; m=+parts[1]; y=+parts[2]; if(y<100) y+=2000; }
-    const dt = new Date(y, m-1, d);
-    if(isNaN(dt)) return null;
-    return toKey(dt);
-  }
-
-  // ****** أحداث عامة ******
+  // أحداث عامة للتنقل بالتاريخ
   datePicker.addEventListener('change', () => {
     selected = datePicker.value || selected;
-    dateInput.value = selected;
     weekdayEl.textContent = weekdayName(fromKey(selected));
     renderDay(selected);
   });
@@ -901,31 +637,31 @@
   todayBtn.addEventListener('click', ()=>{
     selected = toKey(new Date());
     datePicker.value = selected;
-    dateInput.value = selected;
     weekdayEl.textContent = weekdayName(new Date());
     renderDay(selected);
   });
-
   function moveSelected(deltaDays){
     const d = fromKey(selected);
     d.setDate(d.getDate()+deltaDays);
     selected = toKey(d);
-    datePicker.value = selected; dateInput.value = selected; weekdayEl.textContent = weekdayName(d); renderDay(selected);
+    datePicker.value = selected; weekdayEl.textContent = weekdayName(d); renderDay(selected);
   }
 
-  // حفظ عملية جديدة (مع المرفقات)
+  // حفظ عملية جديدة (تاريخ/وقت تلقائيين)
   form.addEventListener('submit', async (e)=>{
     e.preventDefault();
     const kind = type.value;
     const amt = Number(amount.value);
     const ttl = title.value.trim();
     const nt = (note.value||'').trim();
-    const dtKey = dateInput.value || selected;
-    let tm = timeInput.value;
 
     if(!Number.isFinite(amt) || amt <= 0){ toast('أدخل مبلغًا صحيحًا أكبر من صفر'); return; }
     if(!ttl){ toast('الرجاء كتابة اسم القطعة أو الشخص'); return; }
-    if(!tm){ tm = new Date().toTimeString().slice(0,5); }
+
+    // التاريخ = اليوم المحدد في الأعلى
+    const dtKey = selected;
+    // الوقت = ساعة الجهاز الآن
+    const tm = new Date().toTimeString().slice(0,5);
 
     const attIds = [];
     if(pendingAtt.length){
@@ -942,11 +678,9 @@
 
     addEntry({dateKey: dtKey, kind, amount: amt, title: ttl, note: nt, time: tm, attachments: attIds});
 
-    if(dtKey === selected){ renderDay(selected); }
+    renderDay(selected);
     renderHistory();
     form.reset();
-    dateInput.value = selected;
-    timeInput.value = new Date().toTimeString().slice(0,5);
     amount.focus();
     toast('تمت الإضافة');
   });
@@ -978,15 +712,14 @@
     }
   });
 
-  // فتح نافذة التعديل مع مرفقات
-  let editPendingAtt = [];     // مرفقات جديدة {blob, url}
-  let editDeleteIds  = new Set(); // معرفات مرفقات قديمة للحذف
-  let editOldUrlMap  = new Map(); // id -> blobURL
+  // فتح نافذة التعديل (تبقى قابلة لتغيير التاريخ/الوقت)
+  let editPendingAtt = [];     
+  let editDeleteIds  = new Set(); 
+  let editOldUrlMap  = new Map(); 
 
   async function openEditDialog(dateKey, id){
     const item = (state.days[dateKey]||[]).find(x=>x.id===id);
     if(!item) return;
-    // حقول أساسية
     editId.value = id;
     editDateKey.value = dateKey;
     editType.value = item.kind;
@@ -996,10 +729,8 @@
     editDate.value = dateKey;
     editTime.value = item.time || '';
 
-    // نظّف حالة المرفقات
     cleanupEditDialog();
 
-    // اعرض المرفقات الحالية
     const ids = item.attachments || [];
     for(const aid of ids){
       try{
@@ -1031,7 +762,6 @@
     editFiles.value = '';
   }
 
-  // اختيار مرفقات جديدة في التعديل
   editFiles?.addEventListener('change', async ()=>{
     editFilesPreview.innerHTML='';
     editPendingAtt.forEach(p=>{ try{ URL.revokeObjectURL(p.url); }catch{} });
@@ -1104,7 +834,6 @@
     if(go){
       selected = go.dataset.goDay;
       datePicker.value = selected;
-      dateInput.value = selected;
       weekdayEl.textContent = weekdayName(fromKey(selected));
       renderDay(selected);
       window.scrollTo({top:0, behavior:'smooth'});
@@ -1134,10 +863,10 @@
     }
   });
 
-  // PDF: إنشاء تقرير اليوم — المرفقات داخل الصفوف
+  // PDF
   pdfAllBtn.addEventListener('click', ()=> exportPDF('all'));
-  pdfInBtn.addEventListener('click',  ()=> exportPDF('in'));
-  pdfOutBtn.addEventListener('click', ()=> exportPDF('out'));
+  pdfInBtn?.addEventListener('click',  ()=> exportPDF('in'));
+  pdfOutBtn?.addEventListener('click', ()=> exportPDF('out'));
 
   async function exportPDF(mode){
     const dateKey = selected;
@@ -1273,207 +1002,41 @@
     attTempUrls=[];
   });
 
-  // ***************** الكاميرا: ماسح المستند *****************
-  let camStream = null;
-  let currentDeviceId = null;
-  let useMode = 'auto'; // auto|color|bw
-  let rotateSteps = 0;
-  let captureTarget = 'add'; // 'add' أو 'edit' (من أي زر فتحنا الكاميرا)
+  // مشاركة اليوم
+  function shareDay(){
+    const dateKey = datePicker.value || selected;
+    const items = (state.days[dateKey] || []).slice().sort((a,b)=> a.createdAt - b.createdAt);
+    if(!items.length){ toast('لا يوجد بيانات لليوم'); return; }
 
-  function setModeBtn(active){
-    [modeAuto, modeColor, modeBW].forEach(b=> b.classList.remove('active'));
-    if(active==='auto') modeAuto.classList.add('active');
-    if(active==='color') modeColor.classList.add('active');
-    if(active==='bw') modeBW.classList.add('active');
-    useMode = active;
-  }
-  modeAuto?.addEventListener('click', ()=> setModeBtn('auto'));
-  modeColor?.addEventListener('click', ()=> setModeBtn('color'));
-  modeBW?.addEventListener('click', ()=> setModeBtn('bw'));
+    let inSum=0, outSum=0;
+    const lines = items.map((it,i)=>{
+      const kind = it.kind==='in' ? '➕ وارد' : '➖ صادر';
+      const amt  = `${numFmt.format(+it.amount||0)} ${currency}`;
+      if(it.kind==='in') inSum += (+it.amount||0); else outSum += (+it.amount||0);
+      const t = it.time || '--:--';
+      const noteStr = it.note ? ` — ${it.note}` : '';
+      return `${i+1}) ${kind} • ${amt} • ${t} • ${it.title||''}${noteStr}`;
+    });
 
-  rotateBtn?.addEventListener('click', ()=>{
-    rotateSteps = (rotateSteps + 1) % 4;
-    toast('تم التدوير');
-  });
+    const txt =
+`📅 تقرير يوم ${dateKey}
 
-  camBtn?.addEventListener('click', ()=> openCamera('add'));
-  editCamBtn?.addEventListener('click', ()=> openCamera('edit'));
+${lines.join('\n')}
 
-  async function openCamera(target){
-    if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
-      toast('الكاميرا غير مدعومة في هذا المتصفح');
-      return;
+إجمالي الوارد: ${numFmt.format(inSum)} ${currency}
+إجمالي الصادر: ${numFmt.format(outSum)} ${currency}
+الصافي: ${numFmt.format(inSum-outSum)} ${currency}`;
+
+    if(navigator.clipboard){
+      navigator.clipboard.writeText(txt).then(()=>toast('📋 تم نسخ التقرير')).catch(()=>{});
     }
-    captureTarget = target;
-    rotateSteps = 0;
-    setModeBtn('auto');
-
-    await startStream();
-    camCanvas.style.display='none';
-    camVideo.style.display='block';
-    shootBtn.style.display='';
-    retakeBtn.style.display='none';
-    usePhotoBtn.style.display='none';
-    try{ cameraDialog.showModal(); }catch{ /*Safari قد يرفض بدون gesture*/ }
-  }
-
-  async function startStream(deviceId){
-    stopStream();
-    const constraints = {
-      video: deviceId ? { deviceId: { exact: deviceId } } : {
-        facingMode: { ideal:'environment' },
-        width: { ideal:1920 }, height: { ideal:1080 }
-      },
-      audio:false
-    };
-    try{
-      camStream = await navigator.mediaDevices.getUserMedia(constraints);
-      camVideo.srcObject = camStream;
-      camVideo.play().catch(()=>{});
-      currentDeviceId = camStream.getVideoTracks()[0].getSettings().deviceId || null;
-      // عكس الفيديو إذا أمامي
-      const facing = camStream.getVideoTracks()[0].getSettings().facingMode || '';
-      camVideo.style.transform = (facing==='user') ? 'scaleX(-1)' : 'none';
-    }catch(err){
-      console.error(err);
-      toast('تعذر فتح الكاميرا');
+    if(navigator.share){
+      navigator.share({text:txt}).catch(()=>{});
+    }else{
+      window.open('https://wa.me/?text='+encodeURIComponent(txt),'_blank');
     }
   }
-
-  function stopStream(){
-    try{
-      if(camStream){
-        camStream.getTracks().forEach(t=> t.stop());
-        camStream = null;
-      }
-    }catch{}
-  }
-
-  // تبديل الكاميرا
-  flipBtn?.addEventListener('click', async ()=>{
-    try{
-      const list = await navigator.mediaDevices.enumerateDevices();
-      const cams = list.filter(d=> d.kind==='videoinput');
-      if(!cams.length){ toast('لا توجد كاميرات أخرى'); return; }
-      if(!currentDeviceId){
-        await startStream(cams[0].deviceId);
-        return;
-      }
-      const idx = cams.findIndex(c=> c.deviceId===currentDeviceId);
-      const next = cams[(idx+1)%cams.length];
-      await startStream(next.deviceId);
-    }catch(err){
-      console.error(err); toast('تعذر التبديل');
-    }
-  });
-
-  // الفلاش / التورش (تبع الهاتف) إن مدعوم
-  let torchOn = false;
-  torchBtn?.addEventListener('click', async ()=>{
-    try{
-      if(!camStream){ toast('افتح الكاميرا أولاً'); return; }
-      const track = camStream.getVideoTracks()[0];
-      const capabilities = track.getCapabilities ? track.getCapabilities() : {};
-      if(!('torch' in capabilities)){ toast('الفلاش غير مدعوم على هذه الكاميرا'); return; }
-      torchOn = !torchOn;
-      await track.applyConstraints({ advanced:[{ torch: torchOn }] });
-      toast(torchOn ? 'تم تشغيل الإضاءة' : 'تم إيقاف الإضاءة');
-    }catch(err){
-      console.error(err);
-      toast('تعذر التحكم بالإضاءة');
-    }
-  });
-
-  // التقاط
-  shootBtn?.addEventListener('click', ()=>{
-    if(!camStream){ toast('الكاميرا غير مفعّلة'); return; }
-    const track = camStream.getVideoTracks()[0];
-    const settings = track.getSettings();
-    const vw = camVideo.videoWidth || settings.width || 1280;
-    const vh = camVideo.videoHeight || settings.height || 720;
-
-    // نزّل الدقة إلى حد أقصى مناسب للمعالجة
-    const maxSide = 1600;
-    const scale = Math.min(1, maxSide / Math.max(vw, vh));
-    camCanvas.width = Math.round(vw * scale);
-    camCanvas.height = Math.round(vh * scale);
-    const ctx = camCanvas.getContext('2d');
-    // إذا الكاميرا أمامية وكانت مقلوبة، عدّل الرسم
-    const facing = settings.facingMode || '';
-    ctx.save();
-    if(facing==='user'){
-      ctx.translate(camCanvas.width, 0);
-      ctx.scale(-1, 1);
-    }
-    ctx.drawImage(camVideo, 0, 0, camCanvas.width, camCanvas.height);
-    ctx.restore();
-
-    // تحسين
-    enhanceCanvas(camCanvas, useMode, rotateSteps);
-
-    camVideo.style.display='none';
-    camCanvas.style.display='block';
-    shootBtn.style.display='none';
-    retakeBtn.style.display='';
-    usePhotoBtn.style.display='';
-  });
-
-  // إعادة التصوير
-  retakeBtn?.addEventListener('click', ()=>{
-    camCanvas.style.display='none';
-    camVideo.style.display='block';
-    shootBtn.style.display='';
-    retakeBtn.style.display='none';
-    usePhotoBtn.style.display='none';
-  });
-
-  // استخدام الصورة
-  usePhotoBtn?.addEventListener('click', async ()=>{
-    try{
-      const blob = await new Promise(r=> camCanvas.toBlob(b=> r(b), 'image/jpeg', 0.9));
-      const finalBlob = await compressImage(blob, 1600, 0.9);
-      const url = URL.createObjectURL(finalBlob);
-
-      if(captureTarget==='add'){
-        const idx = pendingAtt.length;
-        pendingAtt.push({blob: finalBlob, url});
-        addThumb(url, filesPreview, ()=>{
-          try{ URL.revokeObjectURL(pendingAtt[idx]?.url); }catch{}
-          pendingAtt[idx] = null;
-        });
-        pendingAtt = pendingAtt.filter(Boolean);
-      } else {
-        const idx = editPendingAtt.length;
-        editPendingAtt.push({blob: finalBlob, url});
-        addThumb(url, editFilesPreview, ()=>{
-          try{ URL.revokeObjectURL(editPendingAtt[idx]?.url); }catch{}
-          editPendingAtt[idx] = null;
-        });
-        editPendingAtt = editPendingAtt.filter(Boolean);
-      }
-
-      toast('تم التقاط الصورة');
-      closeCameraDialog();
-    }catch(err){
-      console.error(err);
-      toast('تعذر حفظ الصورة');
-    }
-  });
-
-  // إغلاق
-  function closeCameraDialog(){
-    stopStream();
-    cameraDialog.close();
-    camCanvas.style.display='none';
-    camVideo.style.display='block';
-    shootBtn.style.display='';
-    retakeBtn.style.display='none';
-    usePhotoBtn.style.display='none';
-    rotateSteps = 0;
-    torchOn = false;
-  }
-  closeCamBtn?.addEventListener('click', closeCameraDialog);
-  cameraDialog?.addEventListener('close', ()=> stopStream());
+  shareDayBtn?.addEventListener('click', shareDay);
 
   // تشغيل أولي
   (function boot(){
@@ -1483,16 +1046,10 @@
     renderHistory();
     if(!('indexedDB' in window)){
       filesInput?.setAttribute('disabled','');
-      ocrBtn?.setAttribute('disabled','');
-      editFiles?.setAttribute('disabled','');
-    }
-    if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
-      camBtn?.setAttribute('disabled','');
-      editCamBtn?.setAttribute('disabled','');
     }
   })();
 
-})();
+})(); // end IIFE
 </script>
 </body>
 </html>
