@@ -1,0 +1,702 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>دفتر الصادرات والواردات — محل الأثاث</title>
+  <meta name="color-scheme" content="dark light">
+  <style>
+    :root{
+      --bg:#0f172a; --panel:#111827; --muted:#94a3b8; --text:#e5e7eb;
+      --primary:#60a5fa; --accent:#34d399; --danger:#f87171; --warn:#fbbf24; --good:#22c55e; --border:#1f2937;
+      --shadow:0 10px 24px rgba(0,0,0,.25);
+    }
+    @media (prefers-color-scheme: light){
+      :root{ --bg:#f8fafc; --panel:#ffffff; --muted:#64748b; --text:#0f172a; --border:#e2e8f0; --shadow:0 8px 20px rgba(0,0,0,.06); }
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0;
+      font-family:system-ui, -apple-system, Segoe UI, Roboto, "Tajawal", Arial, sans-serif;
+      background:var(--bg); color:var(--text);
+    }
+
+    header{position:sticky;top:0;background:linear-gradient(180deg, rgba(0,0,0,.35), rgba(0,0,0,0)) , var(--panel);padding:14px;border-bottom:1px solid var(--border);backdrop-filter:saturate(120%) blur(6px);z-index:5}
+    .container{max-width:1100px;margin:0 auto;padding:16px}
+    .brand{display:flex;gap:12px;align-items:center}
+    .brand h1{margin:0;font-size:clamp(20px,3.4vw,26px)}
+
+    .grid{display:grid;grid-template-columns:1.2fr .8fr;gap:16px}
+    @media (max-width:900px){.grid{grid-template-columns:1fr}}
+
+    .card{background:var(--panel);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow)}
+    .card .h{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:10px}
+    .card .b{padding:16px}
+
+    .controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+    button, .btn{appearance:none;border:none;background:var(--primary);color:#fff;padding:10px 14px;border-radius:12px;font-weight:700;cursor:pointer;transition:.2s;display:inline-flex;align-items:center;gap:8px}
+    button.secondary{background:transparent;color:var(--text);border:1px solid var(--border)}
+    button.ghost{background:transparent;color:var(--muted)}
+    button.danger{background:var(--danger)}
+    button.good{background:var(--good)}
+    button:disabled{opacity:.6;cursor:not-allowed}
+    input, select{width:100%;padding:10px 12px;border-radius:12px;border:1px solid var(--border);background:transparent;color:var(--text)}
+    label{font-size:12px;color:var(--muted)}
+    .row{display:grid;grid-template-columns:repeat(12,1fr);gap:10px}
+
+    .chip{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:4px 10px;border:1px solid var(--border);font-size:12px}
+    .chip.in{background:rgba(34,197,94,.12);border-color:rgba(34,197,94,.3)}
+    .chip.out{background:rgba(248,113,113,.12);border-color:rgba(248,113,113,.3)}
+
+    .summary{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+    @media (max-width:640px){.summary{grid-template-columns:1fr}}
+    .sum-card{padding:12px;border-radius:14px;border:1px solid var(--border);background:linear-gradient(180deg, rgba(255,255,255,.03), rgba(0,0,0,0));display:flex;justify-content:space-between;align-items:center}
+    .sum-card h3{margin:0;font-size:13px;color:var(--muted)}
+    .sum-card .v{font-size:20px;font-weight:800}
+    .sum-in .v{color:var(--good)}
+    .sum-out .v{color:var(--danger)}
+    .sum-net .v{color:var(--text)}
+
+    .list{display:flex;flex-direction:column;gap:10px}
+    .item{border:1px solid var(--border);border-radius:14px;padding:12px;display:grid;grid-template-columns:1fr auto;gap:8px}
+    .item .meta{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+    .item .title{font-weight:800}
+    .item .note{color:var(--muted);font-size:12px}
+    .item .amt{font-weight:900}
+    .item .act{display:flex;gap:6px}
+
+    .empty{padding:24px;border:1px dashed var(--border);border-radius:14px;text-align:center;color:var(--muted)}
+
+    .history{max-height:360px;overflow:auto}
+    details{border:1px solid var(--border);border-radius:12px;background:rgba(255,255,255,.02)}
+    details summary{cursor:pointer;padding:12px 14px;list-style:none}
+    details[open]{background:rgba(255,255,255,.04)}
+
+    .kbd{font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;background:rgba(148,163,184,.15);border:1px solid var(--border);padding:2px 6px;border-radius:6px;font-size:12px}
+    .footer{margin:24px 0;color:var(--muted);font-size:12px}
+    .dangerzone{display:flex;gap:8px;flex-wrap:wrap}
+
+    /* Toast */
+    .toast{position:fixed;inset-inline-start:50%;transform:translateX(-50%);bottom:18px;background:#111827;color:#fff;padding:10px 14px;border-radius:10px;box-shadow:var(--shadow);z-index:60;font-weight:700;opacity:0;pointer-events:none;transition:.25s}
+    .toast.show{opacity:1}
+
+    /* الطباعة / PDF */
+    #printContainer{display:none}
+    @media print{
+      @page{ size:A4 portrait; margin:12mm; }
+      body{ background:#fff; color:#000 }
+      header,.no-print{ display:none !important }
+      #printContainer{ display:block !important }
+      .report{ font-family:"Tajawal", Arial, sans-serif }
+      .report h2, .report h3{ margin:0 0 8px }
+      .report .head{ display:flex; justify-content:space-between; align-items:flex-start; gap:10px; margin-bottom:10px }
+      .report .head .meta{ color:#333; font-size:12px }
+      .report .chips{ display:flex; flex-wrap:wrap; gap:6px; margin:6px 0 12px }
+      .report .chip{ border:1px solid #777; color:#000 }
+      .print-table{ width:100%; border-collapse:collapse; }
+      .print-table th,.print-table td{ border:1px solid #555; padding:6px 8px; font-size:12px; vertical-align:top }
+      .print-table th{ background:#f2f2f2 }
+      .report .foot{ display:flex; justify-content:space-between; margin-top:18px; font-size:12px }
+      .report .sig{ min-width:160px; border-top:1px dashed #777; text-align:center; padding-top:6px }
+    }
+  </style>
+</head>
+<body>
+  <header class="no-print">
+    <div class="container brand">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M4 7h16M4 12h16M4 17h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+      </svg>
+      <h1>دفتر الصادرات والواردات — محل الأثاث</h1>
+    </div>
+  </header>
+
+  <div class="container no-print" id="app">
+
+    <div class="grid">
+      <!-- يسار: سجل اليوم -->
+      <section class="card">
+        <div class="h">
+          <div class="controls">
+            <button class="secondary" id="prevDay" title="اليوم السابق">◀</button>
+            <input type="date" id="datePicker" />
+            <button class="secondary" id="nextDay" title="اليوم التالي">▶</button>
+            <button id="todayBtn" title="اليوم">اليوم</button>
+            <span class="chip" id="weekday"></span>
+          </div>
+          <div class="controls">
+            <button class="good" id="pdfAll" title="تصدير PDF لليوم (الكل)">PDF اليوم</button>
+            <button class="secondary" id="pdfIn" title="تصدير PDF واردات اليوم">PDF الواردات</button>
+            <button class="secondary" id="pdfOut" title="تصدير PDF صادرات اليوم">PDF الصادرات</button>
+          </div>
+        </div>
+        <div class="b">
+          <div class="summary" id="summary">
+            <div class="sum-card sum-in"><h3>الواردات</h3><div class="v" id="sumIn">0.00 د.أ</div></div>
+            <div class="sum-card sum-out"><h3>الصادرات</h3><div class="v" id="sumOut">0.00 د.أ</div></div>
+            <div class="sum-card sum-net"><h3>الصافي</h3><div class="v" id="sumNet">0.00 د.أ</div></div>
+          </div>
+
+          <h3 style="margin:18px 0 8px">إضافة عملية</h3>
+          <form id="entryForm" class="row" autocomplete="off">
+            <div class="col" style="grid-column: span 12; display:grid; grid-template-columns:repeat(12,1fr); gap:10px">
+              <div style="grid-column: span 3">
+                <label>النوع</label>
+                <select id="type" required>
+                  <option value="in">وارد (دخل)</option>
+                  <option value="out">صادر (مصروف)</option>
+                </select>
+              </div>
+              <div style="grid-column: span 3">
+                <label>المبلغ (د.أ)</label>
+                <input type="number" step="0.01" min="0" id="amount" placeholder="0.00" required />
+              </div>
+              <div style="grid-column: span 3">
+                <label>التاريخ</label>
+                <input type="date" id="dateInput" required />
+              </div>
+              <div style="grid-column: span 3">
+                <label>الوقت</label>
+                <input type="time" id="timeInput" />
+              </div>
+              <div style="grid-column: span 6">
+                <label>العنصر/الشخص</label>
+                <input type="text" id="title" placeholder="مثال: طقم كنبايات / دفعة من أحمد" required />
+              </div>
+              <div style="grid-column: span 6">
+                <label>ملاحظة</label>
+                <input type="text" id="note" placeholder="تفاصيل إضافية (اختياري)" />
+              </div>
+            </div>
+            <div class="col" style="grid-column: span 12; display:flex; gap:8px; margin-top:6px">
+              <button type="submit">إضافة للسجل</button>
+              <button type="reset" class="secondary">تفريغ</button>
+            </div>
+          </form>
+
+          <h3 style="margin:22px 0 8px">سجل اليوم</h3>
+          <div id="dayList" class="list"></div>
+        </div>
+      </section>
+
+      <!-- يمين: الأرشيف -->
+      <aside class="card">
+        <div class="h">
+          <div>الأرشيف — حسب اليوم</div>
+          <div class="controls">
+            <button class="secondary" id="expandAll">فتح الكل</button>
+            <button class="secondary" id="collapseAll">إغلاق الكل</button>
+          </div>
+        </div>
+        <div class="b history" id="history"></div>
+        <div class="b">
+          <div class="footer" style="margin-top:4px">
+            كل البيانات محفوظة محليًا على جهازك (LocalStorage).
+          </div>
+          <div style="margin-top:10px">
+            <details>
+              <summary>منطقة خطرة</summary>
+              <div class="dangerzone" style="margin-top:10px">
+                <button class="danger" id="wipeAll">حذف كل البيانات</button>
+              </div>
+            </details>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <!-- نافذة تحرير -->
+  <dialog id="editDialog" class="no-print">
+    <div class="dlg-h" style="padding:14px 16px;border-bottom:1px solid var(--border);font-weight:800">تعديل العملية</div>
+    <div class="dlg-b" style="padding:16px">
+      <form id="editForm" class="row">
+        <input type="hidden" id="editId" />
+        <input type="hidden" id="editDateKey" />
+        <div style="grid-column: span 6">
+          <label>النوع</label>
+          <select id="editType" required>
+            <option value="in">وارد (دخل)</option>
+            <option value="out">صادر (مصروف)</option>
+          </select>
+        </div>
+        <div style="grid-column: span 6">
+          <label>المبلغ (د.أ)</label>
+          <input type="number" step="0.01" min="0" id="editAmount" required />
+        </div>
+        <div style="grid-column: span 6">
+          <label>العنصر/الشخص</label>
+          <input type="text" id="editTitle" required />
+        </div>
+        <div style="grid-column: span 6">
+          <label>ملاحظة</label>
+          <input type="text" id="editNote" />
+        </div>
+        <div style="grid-column: span 6">
+          <label>التاريخ</label>
+          <input type="date" id="editDate" required />
+        </div>
+        <div style="grid-column: span 6">
+          <label>الوقت</label>
+          <input type="time" id="editTime" />
+        </div>
+      </form>
+    </div>
+    <div class="dlg-f" style="padding:12px 16px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px">
+      <button class="secondary" id="cancelEdit">إلغاء</button>
+      <button id="saveEdit">حفظ</button>
+    </div>
+  </dialog>
+
+  <!-- منطقة إنشاء تقرير الطباعة / PDF -->
+  <div id="printContainer" aria-hidden="true"></div>
+
+  <!-- Toast -->
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+<script>
+(function(){
+  const LS_KEY = 'furnitureLedgerV1';
+  const currency = 'د.أ';
+
+  // عناصر DOM
+  const datePicker = document.getElementById('datePicker');
+  const weekdayEl = document.getElementById('weekday');
+  const prevDayBtn = document.getElementById('prevDay');
+  const nextDayBtn = document.getElementById('nextDay');
+  const todayBtn = document.getElementById('todayBtn');
+  const dayList = document.getElementById('dayList');
+  const sumIn = document.getElementById('sumIn');
+  const sumOut = document.getElementById('sumOut');
+  const sumNet = document.getElementById('sumNet');
+  const historyEl = document.getElementById('history');
+
+  const pdfAllBtn = document.getElementById('pdfAll');
+  const pdfInBtn  = document.getElementById('pdfIn');
+  const pdfOutBtn = document.getElementById('pdfOut');
+
+  const expandAll = document.getElementById('expandAll');
+  const collapseAll = document.getElementById('collapseAll');
+  const wipeAll = document.getElementById('wipeAll');
+
+  // فورم الإضافة
+  const form = document.getElementById('entryForm');
+  const type = document.getElementById('type');
+  const amount = document.getElementById('amount');
+  const title = document.getElementById('title');
+  const note = document.getElementById('note');
+  const dateInput = document.getElementById('dateInput');
+  const timeInput = document.getElementById('timeInput');
+
+  // حوار التحرير
+  const editDialog = document.getElementById('editDialog');
+  const editForm = document.getElementById('editForm');
+  const editId = document.getElementById('editId');
+  const editType = document.getElementById('editType');
+  const editAmount = document.getElementById('editAmount');
+  const editTitle = document.getElementById('editTitle');
+  const editNote = document.getElementById('editNote');
+  const editDate = document.getElementById('editDate');
+  const editTime = document.getElementById('editTime');
+  const editDateKey = document.getElementById('editDateKey');
+
+  const printContainer = document.getElementById('printContainer');
+  const toastEl = document.getElementById('toast');
+
+  // أدوات وقت/تاريخ
+  const toKey = (d) => {
+    const dt = new Date(d.getTime());
+    dt.setHours(0,0,0,0);
+    const y = dt.getFullYear();
+    const m = String(dt.getMonth()+1).padStart(2,'0');
+    const da = String(dt.getDate()).padStart(2,'0');
+    return `${y}-${m}-${da}`;
+  };
+  const fromKey = (k) => { const [y,m,d] = k.split('-').map(Number); const dt = new Date(y, m-1, d); dt.setHours(0,0,0,0); return dt; };
+  const weekdayName = (date) => new Intl.DateTimeFormat('ar-JO',{weekday:'long'}).format(date);
+  const numFmt = new Intl.NumberFormat('ar-JO',{minimumFractionDigits:2, maximumFractionDigits:2});
+
+  // تخزين
+  const load = () => { try{ return JSON.parse(localStorage.getItem(LS_KEY)) || { days:{} }; } catch{ return { days:{} }; } };
+  const save = (data) => localStorage.setItem(LS_KEY, JSON.stringify(data));
+
+  // حالة التطبيق
+  let state = load();
+  let selected = toKey(new Date());
+
+  // Toast
+  function toast(msg){
+    toastEl.textContent = msg;
+    toastEl.classList.add('show');
+    setTimeout(()=> toastEl.classList.remove('show'), 1600);
+  }
+
+  // تهيئة حقول الوقت والتاريخ
+  const initDateControls = () => {
+    datePicker.value = selected;
+    dateInput.value = selected;
+    timeInput.value = new Date().toTimeString().slice(0,5);
+    weekdayEl.textContent = weekdayName(fromKey(selected));
+  };
+
+  // عمليات CRUD
+  const addEntry = ({dateKey, kind, amount, title, note, time}) => {
+    const id = cryptoRandomId();
+    const createdAt = Date.now();
+    if(!state.days[dateKey]) state.days[dateKey] = [];
+    state.days[dateKey].push({ id, kind, amount, title, note, time, createdAt });
+    save(state);
+  };
+  const updateEntry = ({oldDateKey, id, dateKey, kind, amount, title, note, time}) => {
+    const list = state.days[oldDateKey] || [];
+    const idx = list.findIndex(x => x.id === id);
+    if(idx === -1) return;
+    const item = list[idx];
+    // إذا تغيّر التاريخ، انقل للسجل الجديد
+    if(oldDateKey !== dateKey){
+      list.splice(idx,1);
+      if(!state.days[dateKey]) state.days[dateKey] = [];
+      state.days[dateKey].push({ ...item, kind, amount, title, note, time });
+      if(list.length === 0) delete state.days[oldDateKey];
+    } else {
+      list[idx] = { ...item, kind, amount, title, note, time };
+    }
+    save(state);
+  };
+  const deleteEntry = (dateKey, id) => {
+    const list = state.days[dateKey] || [];
+    const idx = list.findIndex(x => x.id === id);
+    if(idx === -1) return;
+    list.splice(idx,1);
+    if(list.length === 0) delete state.days[dateKey];
+    save(state);
+  };
+
+  function cryptoRandomId(){
+    if(window.crypto && crypto.getRandomValues){
+      const a = crypto.getRandomValues(new Uint32Array(4));
+      return [...a].map(x=>x.toString(16).padStart(8,'0')).join('');
+    }
+    return Math.random().toString(16).slice(2)+Date.now().toString(16);
+  }
+
+  // عرض اليوم
+  const renderDay = (dateKey) => {
+    const list = (state.days[dateKey] || []).slice().sort((a,b)=> a.createdAt - b.createdAt);
+    dayList.innerHTML = '';
+    if(list.length === 0){
+      dayList.innerHTML = `<div class="empty">لا توجد عمليات لهذا اليوم.</div>`;
+    } else {
+      list.forEach(item => {
+        const row = document.createElement('div');
+        row.className = 'item';
+        row.dataset.id = item.id;
+        row.dataset.dateKey = dateKey;
+        const chipClass = item.kind === 'in' ? 'chip in' : 'chip out';
+        row.innerHTML = `
+          <div>
+            <div class="meta">
+              <span class="${chipClass}">${item.kind === 'in' ? 'وارد' : 'صادر'}</span>
+              <span class="chip">${item.time || '--:--'}</span>
+            </div>
+            <div class="title" style="margin-top:6px">${escapeHtml(item.title || '')}</div>
+            <div class="note">${escapeHtml(item.note || '')}</div>
+          </div>
+          <div style="text-align:end">
+            <div class="amt">${numFmt.format(Number(item.amount||0))} ${currency}</div>
+            <div class="act" style="margin-top:8px">
+              <button class="secondary" data-act="edit">تعديل</button>
+              <button class="danger" data-act="del">حذف</button>
+            </div>
+          </div>
+        `;
+        dayList.appendChild(row);
+      });
+    }
+    // ملخص
+    const totalIn = list.filter(x=>x.kind==='in').reduce((s,x)=>s + Number(x.amount||0),0);
+    const totalOut = list.filter(x=>x.kind==='out').reduce((s,x)=>s + Number(x.amount||0),0);
+    sumIn.textContent = `${numFmt.format(totalIn)} ${currency}`;
+    sumOut.textContent = `${numFmt.format(totalOut)} ${currency}`;
+    sumNet.textContent = `${numFmt.format(totalIn - totalOut)} ${currency}`;
+  };
+
+  // الأرشيف (كل الأيام)
+  const renderHistory = () => {
+    const keys = Object.keys(state.days).sort((a,b)=> b.localeCompare(a)); // الأحدث أولًا
+    historyEl.innerHTML = '';
+    if(keys.length === 0){
+      historyEl.innerHTML = '<div class="empty">لا توجد بيانات محفوظة بعد.</div>';
+      return;
+    }
+    keys.forEach(k => {
+      const list = state.days[k] || [];
+      const totalIn = list.filter(x=>x.kind==='in').reduce((s,x)=>s + Number(x.amount||0),0);
+      const totalOut = list.filter(x=>x.kind==='out').reduce((s,x)=>s + Number(x.amount||0),0);
+      const net = totalIn - totalOut;
+
+      const details = document.createElement('details');
+      const dt = fromKey(k);
+      details.innerHTML = `
+        <summary>
+          <strong>${k}</strong> — ${weekdayName(dt)}
+          <span class="chip in" style="margin-inline:6px">واردات: ${numFmt.format(totalIn)} ${currency}</span>
+          <span class="chip out">صادرات: ${numFmt.format(totalOut)} ${currency}</span>
+          <span class="chip" style="margin-inline:6px">الصافي: ${numFmt.format(net)} ${currency}</span>
+          <span class="chip" data-go-day="${k}" title="فتح هذا اليوم">عرض</span>
+        </summary>
+        <div class="b" style="padding:12px 14px">
+          ${(list||[]).map(it => `
+            <div class="item" style="margin-bottom:8px">
+              <div>
+                <div class="meta">
+                  <span class="${it.kind==='in'?'chip in':'chip out'}">${it.kind==='in'?'وارد':'صادر'}</span>
+                  <span class="chip">${it.time || '--:--'}</span>
+                </div>
+                <div class="title" style="margin-top:6px">${escapeHtml(it.title||'')}</div>
+                <div class="note">${escapeHtml(it.note||'')}</div>
+              </div>
+              <div style="text-align:end">
+                <div class="amt">${numFmt.format(Number(it.amount||0))} ${currency}</div>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      `;
+      historyEl.appendChild(details);
+    });
+  };
+
+  // أدوات مساعدة
+  function escapeHtml(str){ return String(str).replace(/[&<>"]/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[s])); }
+
+  // أحداث عامة
+  datePicker.addEventListener('change', () => {
+    selected = datePicker.value || selected;
+    dateInput.value = selected;
+    weekdayEl.textContent = weekdayName(fromKey(selected));
+    renderDay(selected);
+  });
+  prevDayBtn.addEventListener('click', ()=>{ moveSelected(-1); });
+  nextDayBtn.addEventListener('click', ()=>{ moveSelected(+1); });
+  todayBtn.addEventListener('click', ()=>{
+    selected = toKey(new Date());
+    datePicker.value = selected;
+    dateInput.value = selected;
+    weekdayEl.textContent = weekdayName(new Date());
+    renderDay(selected);
+  });
+
+  function moveSelected(deltaDays){
+    const d = fromKey(selected);
+    d.setDate(d.getDate()+deltaDays);
+    selected = toKey(d);
+    datePicker.value = selected; dateInput.value = selected; weekdayEl.textContent = weekdayName(d); renderDay(selected);
+  }
+
+  form.addEventListener('submit', (e)=>{
+    e.preventDefault();
+    const kind = type.value;
+    const amt = Number(amount.value);
+    const ttl = title.value.trim();
+    const nt = (note.value||'').trim();
+    const dtKey = dateInput.value || selected;
+    let tm = timeInput.value;
+
+    if(!Number.isFinite(amt) || amt <= 0){ toast('أدخل مبلغًا صحيحًا أكبر من صفر'); return; }
+    if(!ttl){ toast('الرجاء كتابة اسم القطعة أو الشخص'); return; }
+    if(!tm){ tm = new Date().toTimeString().slice(0,5); }
+
+    addEntry({dateKey: dtKey, kind, amount: amt, title: ttl, note: nt, time: tm});
+
+    if(dtKey === selected){ renderDay(selected); }
+    renderHistory();
+    form.reset();
+    dateInput.value = selected;
+    timeInput.value = new Date().toTimeString().slice(0,5);
+    amount.focus();
+    toast('تمت الإضافة');
+  });
+
+  dayList.addEventListener('click', (e)=>{
+    const btn = e.target.closest('button');
+    if(!btn) return;
+    const act = btn.dataset.act;
+    const row = btn.closest('.item');
+    const id = row?.dataset.id;
+    const dateKey = row?.dataset.dateKey;
+    if(!id || !dateKey) return;
+
+    if(act === 'del'){
+      if(confirm('هل تريد حذف هذه العملية؟')){
+        deleteEntry(dateKey, id);
+        renderDay(selected);
+        renderHistory();
+        toast('تم الحذف');
+      }
+    }
+    if(act === 'edit'){
+      const item = (state.days[dateKey]||[]).find(x=>x.id===id);
+      if(!item) return;
+      editId.value = id;
+      editDateKey.value = dateKey;
+      editType.value = item.kind;
+      editAmount.value = item.amount;
+      editTitle.value = item.title || '';
+      editNote.value = item.note || '';
+      editDate.value = dateKey;
+      editTime.value = item.time || '';
+      editDialog.showModal();
+    }
+  });
+
+  document.getElementById('cancelEdit').addEventListener('click', ()=> editDialog.close());
+  document.getElementById('saveEdit').addEventListener('click', ()=>{
+    const id = editId.value;
+    const oldDateKey = editDateKey.value;
+    const newDateKey = editDate.value || oldDateKey;
+    const kind = editType.value;
+    const amt = Number(editAmount.value);
+    const ttl = editTitle.value.trim();
+    const nt = (editNote.value||'').trim();
+    const tm = editTime.value || '--:--';
+
+    if(!Number.isFinite(amt) || amt <= 0){ toast('المبلغ غير صالح'); return; }
+    if(!ttl){ toast('يجب إدخال العنصر/الشخص'); return; }
+
+    updateEntry({oldDateKey, id, dateKey:newDateKey, kind, amount:amt, title:ttl, note:nt, time:tm});
+    editDialog.close();
+    if(newDateKey === selected || oldDateKey === selected){ renderDay(selected); }
+    renderHistory();
+    toast('تم الحفظ');
+  });
+
+  // الأرشيف: فتح يوم معيّن
+  historyEl.addEventListener('click', (e)=>{
+    const go = e.target.closest('[data-go-day]');
+    if(go){
+      selected = go.dataset.goDay;
+      datePicker.value = selected;
+      dateInput.value = selected;
+      weekdayEl.textContent = weekdayName(fromKey(selected));
+      renderDay(selected);
+      window.scrollTo({top:0, behavior:'smooth'});
+    }
+  });
+
+  // فتح/إغلاق كل الأيام
+  expandAll.addEventListener('click', ()=>{ historyEl.querySelectorAll('details').forEach(d=> d.open = true); });
+  collapseAll.addEventListener('click', ()=>{ historyEl.querySelectorAll('details').forEach(d=> d.open = false); });
+
+  // حذف جميع البيانات
+  wipeAll.addEventListener('click', ()=>{
+    if(confirm('تحذير: سيتم حذف كل البيانات نهائيًا. هل أنت متأكد؟')){
+      state = { days:{} };
+      save(state);
+      renderDay(selected);
+      renderHistory();
+      toast('تم حذف كل البيانات');
+    }
+  });
+
+  // PDF: إنشاء تقرير اليوم
+  pdfAllBtn.addEventListener('click', ()=> exportPDF('all'));
+  pdfInBtn.addEventListener('click',  ()=> exportPDF('in'));
+  pdfOutBtn.addEventListener('click', ()=> exportPDF('out'));
+
+  function exportPDF(mode){
+    const dateKey = selected;
+    const listAll = (state.days[dateKey] || []).slice().sort((a,b)=> a.createdAt - b.createdAt);
+    const list = mode==='all' ? listAll : listAll.filter(x=> x.kind === mode);
+    if(list.length === 0){ toast('لا توجد بيانات للطباعة في هذا اليوم'); return; }
+
+    const ttlIn = listAll.filter(x=>x.kind==='in').reduce((s,x)=>s + Number(x.amount||0),0);
+    const ttlOut = listAll.filter(x=>x.kind==='out').reduce((s,x)=>s + Number(x.amount||0),0);
+    const netAll = ttlIn - ttlOut;
+
+    const label = mode==='all' ? 'تقرير اليوم (الكل)' : (mode==='in' ? 'تقرير واردات اليوم' : 'تقرير صادرات اليوم');
+
+    // عنوان المستند (اسم ملف PDF الافتراضي في معظم المتصفحات)
+    const oldTitle = document.title;
+    document.title = `${label} - ${dateKey}`;
+
+    // بناء محتوى التقرير
+    const rows = list.map((it, idx) => `
+      <tr>
+        <td>${idx+1}</td>
+        ${mode==='all' ? `<td>${it.kind==='in'?'وارد':'صادر'}</td>` : ``}
+        <td>${escapeHtml(it.time || '--:--')}</td>
+        <td>${escapeHtml(it.title || '')}</td>
+        <td>${escapeHtml(it.note || '')}</td>
+        <td style="text-align:left">${numFmt.format(Number(it.amount||0))} ${currency}</td>
+      </tr>
+    `).join('');
+
+    const sumMode = list.reduce((s,x)=> s + Number(x.amount||0), 0);
+
+    printContainer.innerHTML = `
+      <div class="report">
+        <div class="head">
+          <div>
+            <h2>محل الأثاث</h2>
+            <h3>${label}</h3>
+            <div class="meta">التاريخ: ${dateKey} — ${weekdayName(fromKey(dateKey))}</div>
+          </div>
+          <div class="meta">
+            <div>تم الإنشاء: ${new Date().toLocaleString('ar-JO')}</div>
+            <div>العملة: ${currency}</div>
+          </div>
+        </div>
+
+        <div class="chips">
+          <span class="chip">إجمالي واردات اليوم: <strong>${numFmt.format(ttlIn)}</strong> ${currency}</span>
+          <span class="chip">إجمالي صادرات اليوم: <strong>${numFmt.format(ttlOut)}</strong> ${currency}</span>
+          <span class="chip">صافي اليوم: <strong>${numFmt.format(netAll)}</strong> ${currency}</span>
+          ${mode!=='all' ? `<span class="chip">إجمالي ${mode==='in'?'الواردات':'الصادرات'} في التقرير: <strong>${numFmt.format(sumMode)}</strong> ${currency}</span>` : ``}
+        </div>
+
+        <table class="print-table" aria-label="جدول تقرير ${label}">
+          <thead>
+            <tr>
+              <th>#</th>
+              ${mode==='all' ? '<th>النوع</th>' : ''}
+              <th>الوقت</th>
+              <th>العنصر/الشخص</th>
+              <th>ملاحظة</th>
+              <th>المبلغ</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+          <tfoot>
+            <tr>
+              <th colspan="${mode==='all' ? 5 : 4}" style="text-align:start">الإجمالي</th>
+              <th style="text-align:left">${numFmt.format(sumMode)} ${currency}</th>
+            </tr>
+          </tfoot>
+        </table>
+
+        <div class="foot">
+          <div class="sig">مسؤول الصندوق</div>
+          <div class="sig">الإدارة</div>
+        </div>
+      </div>
+    `;
+
+    // طباعة (الحفظ كـ PDF من حوار الطباعة)
+    const after = ()=>{ document.title = oldTitle; window.removeEventListener('afterprint', after); };
+    window.addEventListener('afterprint', after);
+    setTimeout(()=> window.print(), 20);
+  }
+
+  // تشغيل أولي
+  (function boot(){
+    selected = toKey(new Date());
+    initDateControls();
+    renderDay(selected);
+    renderHistory();
+  })();
+})();
+</script>
+</body>
+</html>
