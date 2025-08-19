@@ -79,13 +79,7 @@
 
     /* Toast */
     .toast{position:fixed;inset-inline-start:50%;transform:translateX(-50%);bottom:18px;background:#111827;color:#fff;padding:10px 14px;border-radius:10px;box-shadow:var(--shadow);z-index:60;font-weight:700;opacity:0;pointer-events:none;transition:.25s}
-    .toast.show{opacity:1; pointer-events:auto}
-
-    /* مصغّرات المرفقات */
-    .thumbs{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
-    .thumb{width:64px;height:64px;border:1px solid var(--border);border-radius:8px;overflow:hidden;position:relative}
-    .thumb img{width:100%;height:100%;object-fit:cover}
-    .thumb .x{position:absolute;top:2px;inset-inline-end:2px;background:rgba(0,0,0,.6);color:#fff;border:none;border-radius:6px;padding:2px 4px;cursor:pointer}
+    .toast.show{opacity:1}
 
     /* الطباعة / PDF */
     #printContainer{display:none}
@@ -105,9 +99,6 @@
       .print-table th{ background:#f2f2f2 }
       .report .foot{ display:flex; justify-content:space-between; margin-top:18px; font-size:12px }
       .report .sig{ min-width:160px; border-top:1px dashed #777; text-align:center; padding-top:6px }
-      /* مرفقات داخل التقرير (اختياري لاحقًا) */
-      .p-attachments {margin-top:8px; display:flex; gap:4px; flex-wrap:wrap}
-      .p-attachments img {width:90px;height:90px;object-fit:cover;border:1px solid #555}
     }
   </style>
 </head>
@@ -177,16 +168,6 @@
                 <label>ملاحظة</label>
                 <input type="text" id="note" placeholder="تفاصيل إضافية (اختياري)" />
               </div>
-
-              <!-- المرفقات + OCR -->
-              <div style="grid-column: span 12">
-                <label>مرفقات الفاتورة (صور)</label>
-                <input type="file" id="files" accept="image/*" multiple />
-                <div id="filesPreview" class="thumbs"></div>
-                <div style="margin-top:6px; display:flex; gap:8px; flex-wrap:wrap">
-                  <button type="button" id="ocrBtn" class="secondary" title="قراءة الفاتورة تلقائيًا">قراءة الفاتورة تلقائيًا (OCR)</button>
-                </div>
-              </div>
             </div>
             <div class="col" style="grid-column: span 12; display:flex; gap:8px; margin-top:6px">
               <button type="submit">إضافة للسجل</button>
@@ -211,7 +192,7 @@
         <div class="b history" id="history"></div>
         <div class="b">
           <div class="footer" style="margin-top:4px">
-            كل البيانات محفوظة محليًا على جهازك (LocalStorage + IndexedDB للمرفقات).
+            كل البيانات محفوظة محليًا على جهازك (LocalStorage).
           </div>
           <div style="margin-top:10px">
             <details>
@@ -268,23 +249,11 @@
     </div>
   </dialog>
 
-  <!-- حوار استعراض المرفقات -->
-  <dialog id="attDialog" class="no-print">
-    <div style="padding:12px 16px;border-bottom:1px solid var(--border);font-weight:800">مرفقات الفاتورة</div>
-    <div id="attBody" style="padding:12px 16px;display:flex;flex-wrap:wrap;gap:10px"></div>
-    <div style="padding:12px 16px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px">
-      <button class="secondary" id="attClose">إغلاق</button>
-    </div>
-  </dialog>
-
   <!-- منطقة إنشاء تقرير الطباعة / PDF -->
   <div id="printContainer" aria-hidden="true"></div>
 
   <!-- Toast -->
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-
-  <!-- Tesseract (OCR اختياري) -->
-  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4.0.2/dist/tesseract.min.js"></script>
 
 <script>
 (function(){
@@ -310,14 +279,6 @@
   const expandAll = document.getElementById('expandAll');
   const collapseAll = document.getElementById('collapseAll');
   const wipeAll = document.getElementById('wipeAll');
-
-  // مرفقات + OCR
-  const filesInput = document.getElementById('files');
-  const filesPreview = document.getElementById('filesPreview');
-  const ocrBtn = document.getElementById('ocrBtn');
-  const attDialog = document.getElementById('attDialog');
-  const attBody = document.getElementById('attBody');
-  const attClose = document.getElementById('attClose');
 
   // فورم الإضافة
   const form = document.getElementById('entryForm');
@@ -364,67 +325,6 @@
   let state = load();
   let selected = toKey(new Date());
 
-  // IndexedDB للمرفقات
-  const DB_NAME='furnitureLedgerDB', DB_VER=1;
-  let dbPromise = initDB();
-  async function initDB(){
-    return new Promise((res,rej)=>{
-      if(!('indexedDB' in window)){ res(null); return; }
-      const req = indexedDB.open(DB_NAME, DB_VER);
-      req.onupgradeneeded = ()=> {
-        const db = req.result;
-        if(!db.objectStoreNames.contains('attachments')){
-          db.createObjectStore('attachments'); // key=id
-        }
-      };
-      req.onsuccess = ()=> res(req.result);
-      req.onerror   = ()=> rej(req.error);
-    });
-  }
-  function txPut(db, store, key, val){ return new Promise((res,rej)=>{ const tx=db.transaction(store,'readwrite'); tx.objectStore(store).put(val,key); tx.oncomplete=res; tx.onerror=()=>rej(tx.error); }); }
-  function txGet(db, store, key){ return new Promise((res,rej)=>{ const tx=db.transaction(store,'readonly'); const req=tx.objectStore(store).get(key); req.onsuccess=()=>res(req.result); req.onerror=()=>rej(req.error); }); }
-  function txDel(db, store, key){ return new Promise((res,rej)=>{ const tx=db.transaction(store,'readwrite'); tx.objectStore(store).delete(key); tx.oncomplete=res; tx.onerror=()=>rej(tx.error); }); }
-  async function putAttachment(blob){
-    const id = 'att_' + cryptoRandomId();
-    const db = await dbPromise;
-    if(!db){ throw new Error('لا يوجد دعم للمرفقات'); }
-    await txPut(db,'attachments', id, blob);
-    return id;
-  }
-  async function getAttachment(id){
-    const db = await dbPromise; if(!db) return null;
-    return txGet(db,'attachments', id);
-  }
-  async function deleteAttachment(id){
-    const db = await dbPromise; if(!db) return;
-    return txDel(db,'attachments', id);
-  }
-
-  // ضغط الصور قبل الحفظ
-  async function fileToImage(file){
-    return new Promise((res,rej)=>{
-      const fr = new FileReader();
-      fr.onload = e=>{
-        const img = new Image();
-        img.onload = ()=> res(img);
-        img.onerror = rej;
-        img.src = e.target.result;
-      };
-      fr.onerror = rej;
-      fr.readAsDataURL(file);
-    });
-  }
-  async function compressImage(file, maxSide=1600, quality=0.8){
-    const img = await fileToImage(file);
-    const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
-    const canvas = document.createElement('canvas');
-    canvas.width = Math.round(img.width * scale);
-    canvas.height = Math.round(img.height * scale);
-    const ctx = canvas.getContext('2d');
-    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-    return new Promise(r=> canvas.toBlob(r, 'image/jpeg', quality));
-  }
-
   // Toast
   function toast(msg){
     toastEl.textContent = msg;
@@ -440,12 +340,12 @@
     weekdayEl.textContent = weekdayName(fromKey(selected));
   };
 
-  // عمليات CRUD (تدعم attachments)
-  const addEntry = ({dateKey, kind, amount, title, note, time, attachments}) => {
+  // عمليات CRUD
+  const addEntry = ({dateKey, kind, amount, title, note, time}) => {
     const id = cryptoRandomId();
     const createdAt = Date.now();
     if(!state.days[dateKey]) state.days[dateKey] = [];
-    state.days[dateKey].push({ id, kind, amount, title, note, time, createdAt, attachments: attachments||[] });
+    state.days[dateKey].push({ id, kind, amount, title, note, time, createdAt });
     save(state);
   };
   const updateEntry = ({oldDateKey, id, dateKey, kind, amount, title, note, time}) => {
@@ -453,7 +353,7 @@
     const idx = list.findIndex(x => x.id === id);
     if(idx === -1) return;
     const item = list[idx];
-    // نقل ليوم مختلف؟
+    // إذا تغيّر التاريخ، انقل للسجل الجديد
     if(oldDateKey !== dateKey){
       list.splice(idx,1);
       if(!state.days[dateKey]) state.days[dateKey] = [];
@@ -464,18 +364,14 @@
     }
     save(state);
   };
-  async function deleteEntry(dateKey, id){
+  const deleteEntry = (dateKey, id) => {
     const list = state.days[dateKey] || [];
     const idx = list.findIndex(x => x.id === id);
     if(idx === -1) return;
-    const [removed] = list.splice(idx,1);
+    list.splice(idx,1);
     if(list.length === 0) delete state.days[dateKey];
     save(state);
-    // حذف مرفقات العملية من IndexedDB
-    if(removed && removed.attachments){
-      for(const aid of removed.attachments){ try{ await deleteAttachment(aid); }catch{} }
-    }
-  }
+  };
 
   function cryptoRandomId(){
     if(window.crypto && crypto.getRandomValues){
@@ -485,7 +381,7 @@
     return Math.random().toString(16).slice(2)+Date.now().toString(16);
   }
 
-  // عرض اليوم (مع شارة المرفقات)
+  // عرض اليوم
   const renderDay = (dateKey) => {
     const list = (state.days[dateKey] || []).slice().sort((a,b)=> a.createdAt - b.createdAt);
     dayList.innerHTML = '';
@@ -498,13 +394,11 @@
         row.dataset.id = item.id;
         row.dataset.dateKey = dateKey;
         const chipClass = item.kind === 'in' ? 'chip in' : 'chip out';
-        const attCount = (item.attachments||[]).length;
         row.innerHTML = `
           <div>
             <div class="meta">
               <span class="${chipClass}">${item.kind === 'in' ? 'وارد' : 'صادر'}</span>
               <span class="chip">${item.time || '--:--'}</span>
-              ${attCount ? `<span class="chip">📎 ${attCount} مرفق</span>` : ``}
             </div>
             <div class="title" style="margin-top:6px">${escapeHtml(item.title || '')}</div>
             <div class="note">${escapeHtml(item.note || '')}</div>
@@ -512,7 +406,6 @@
           <div style="text-align:end">
             <div class="amt">${numFmt.format(Number(item.amount||0))} ${currency}</div>
             <div class="act" style="margin-top:8px">
-              ${attCount ? `<button class="secondary" data-act="att">مرفقات</button>` : ``}
               <button class="secondary" data-act="edit">تعديل</button>
               <button class="danger" data-act="del">حذف</button>
             </div>
@@ -560,7 +453,6 @@
                 <div class="meta">
                   <span class="${it.kind==='in'?'chip in':'chip out'}">${it.kind==='in'?'وارد':'صادر'}</span>
                   <span class="chip">${it.time || '--:--'}</span>
-                  ${(it.attachments && it.attachments.length) ? `<span class="chip">📎 ${it.attachments.length} مرفق</span>` : ``}
                 </div>
                 <div class="title" style="margin-top:6px">${escapeHtml(it.title||'')}</div>
                 <div class="note">${escapeHtml(it.note||'')}</div>
@@ -579,86 +471,7 @@
   // أدوات مساعدة
   function escapeHtml(str){ return String(str).replace(/[&<>"]/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[s])); }
 
-  // ****** مرفقات: معالجة الإدخال والمعاينة ******
-  let pendingAtt = []; // {blob, url}
-  function addThumb(url){
-    const div=document.createElement('div'); div.className='thumb';
-    div.innerHTML = `<img src="${url}" alt="صورة فاتورة"><button class="x" title="إزالة">×</button>`;
-    div.querySelector('.x').onclick=()=>{
-      const idx = pendingAtt.findIndex(p=>p.url===url);
-      if(idx>-1){ URL.revokeObjectURL(pendingAtt[idx].url); pendingAtt.splice(idx,1); }
-      div.remove();
-    };
-    filesPreview.appendChild(div);
-  }
-
-  filesInput?.addEventListener('change', async ()=>{
-    pendingAtt=[]; filesPreview.innerHTML='';
-    if(!filesInput.files || !filesInput.files.length) return;
-    if(!('indexedDB' in window)){ toast('متصفحك لا يدعم المرفقات؛ تم تعطيلها'); filesInput.value=''; return; }
-    const MAX_FILES = 6;
-    let count = 0;
-    for (const file of filesInput.files) {
-      if(!file.type.startsWith('image/')) continue;
-      if(count >= MAX_FILES){ toast('تم الوصول للحد الأقصى للمرفقات'); break; }
-      try{
-        const blob = await compressImage(file, 1600, 0.8);
-        const url = URL.createObjectURL(blob);
-        pendingAtt.push({blob, url});
-        addThumb(url);
-        count++;
-      }catch{ /* تجاهل صورة تالفة */ }
-    }
-  });
-
-  // OCR: قراءة الفاتورة (اختياري)
-  ocrBtn?.addEventListener('click', async ()=>{
-    try{
-      if(!window.Tesseract){ alert('OCR غير متاح حالياً'); return; }
-      if(pendingAtt.length===0){ toast('أضف صورة فاتورة أولاً'); return; }
-      const blob = pendingAtt[0].blob;
-      const { data } = await Tesseract.recognize(blob, 'ara+eng', { logger:m=>console.log(m) });
-      const text = (data.text || '').replace(/\s+/g,' ').trim();
-
-      // مبلغ: يلتقط 1234.56 أو 1,234.56 أو 1234
-      const amtMatch  = text.match(/(\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{2})?|\d+(?:[.,]\d{2})?)/);
-      // تاريخ: 2025-01-31 أو 31/01/2025 ونحوها
-      const dateMatch = text.match(/(\d{4}[\/\-\.]\d{1,2}[\/\-\.]\d{1,2}|\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4})/);
-
-      if(amtMatch && !amount.value){
-        let norm = amtMatch[1].replace(/\s/g,'');
-        // أزل الفواصل الآلاف
-        if(/,\d{3}/.test(norm)) norm = norm.replace(/,/g,'');
-        // استبدل الفاصلة العشرية بنقطة إن لزم
-        const parts = norm.split(',');
-        if(parts.length===2 && !parts[1].includes('.')) norm = parts[0]+'.'+parts[1];
-        amount.value = norm;
-      }
-      if(dateMatch && !dateInput.value){
-        const norm = normalizeDate(dateMatch[1]);
-        if(norm) dateInput.value = norm;
-      }
-      if(!note.value) note.value = 'OCR';
-      toast('تمت قراءة الفاتورة مبدئيًا — راجع القيم قبل الحفظ');
-    }catch(err){
-      console.error(err);
-      toast('تعذر قراءة الفاتورة');
-    }
-  });
-
-  function normalizeDate(raw){
-    const s = raw.replace(/\./g,'/').replace(/-/g,'/');
-    const parts = s.split('/');
-    if(parts.length!==3) return null;
-    let y,m,d;
-    if(parts[0].length===4){ y=+parts[0]; m=+parts[1]; d=+parts[2]; }
-    else { d=+parts[0]; m=+parts[1]; y=+parts[2]; if(y<100) y+=2000; }
-    const dt = new Date(y, m-1, d);
-    if(isNaN(dt)) return null;
-    return toKey(dt);
-  }
-
-  // ****** أحداث عامة ******
+  // أحداث عامة
   datePicker.addEventListener('change', () => {
     selected = datePicker.value || selected;
     dateInput.value = selected;
@@ -682,8 +495,7 @@
     datePicker.value = selected; dateInput.value = selected; weekdayEl.textContent = weekdayName(d); renderDay(selected);
   }
 
-  // حفظ عملية جديدة (مع تخزين المرفقات في IndexedDB)
-  form.addEventListener('submit', async (e)=>{
+  form.addEventListener('submit', (e)=>{
     e.preventDefault();
     const kind = type.value;
     const amt = Number(amount.value);
@@ -696,21 +508,7 @@
     if(!ttl){ toast('الرجاء كتابة اسم القطعة أو الشخص'); return; }
     if(!tm){ tm = new Date().toTimeString().slice(0,5); }
 
-    // خزّن المرفقات
-    const attIds = [];
-    if(pendingAtt.length){
-      if(!('indexedDB' in window)){ toast('متصفحك لا يدعم المرفقات؛ تم تجاهلها'); }
-      else {
-        for(const p of pendingAtt){
-          try{ const id = await putAttachment(p.blob); attIds.push(id); }
-          catch{ /* تجاهل فشل صورة */ }
-          finally{ URL.revokeObjectURL(p.url); }
-        }
-      }
-      pendingAtt = []; filesInput.value=''; filesPreview.innerHTML='';
-    }
-
-    addEntry({dateKey: dtKey, kind, amount: amt, title: ttl, note: nt, time: tm, attachments: attIds});
+    addEntry({dateKey: dtKey, kind, amount: amt, title: ttl, note: nt, time: tm});
 
     if(dtKey === selected){ renderDay(selected); }
     renderHistory();
@@ -721,19 +519,18 @@
     toast('تمت الإضافة');
   });
 
-  // نقرات على عناصر السجل
-  dayList.addEventListener('click', async (e)=>{
+  dayList.addEventListener('click', (e)=>{
     const btn = e.target.closest('button');
     if(!btn) return;
     const act = btn.dataset.act;
-    const row = btn.closest('item, .item');
+    const row = btn.closest('.item');
     const id = row?.dataset.id;
     const dateKey = row?.dataset.dateKey;
     if(!id || !dateKey) return;
 
     if(act === 'del'){
       if(confirm('هل تريد حذف هذه العملية؟')){
-        await deleteEntry(dateKey, id);
+        deleteEntry(dateKey, id);
         renderDay(selected);
         renderHistory();
         toast('تم الحذف');
@@ -751,10 +548,6 @@
       editDate.value = dateKey;
       editTime.value = item.time || '';
       editDialog.showModal();
-    }
-    if(act === 'att'){
-      const item = (state.days[dateKey]||[]).find(x=>x.id===id);
-      openAttachments(item?.attachments || []);
     }
   });
 
@@ -796,18 +589,9 @@
   expandAll.addEventListener('click', ()=>{ historyEl.querySelectorAll('details').forEach(d=> d.open = true); });
   collapseAll.addEventListener('click', ()=>{ historyEl.querySelectorAll('details').forEach(d=> d.open = false); });
 
-  // حذف جميع البيانات (مع المرفقات)
-  wipeAll.addEventListener('click', async ()=>{
+  // حذف جميع البيانات
+  wipeAll.addEventListener('click', ()=>{
     if(confirm('تحذير: سيتم حذف كل البيانات نهائيًا. هل أنت متأكد؟')){
-      // امسح المرفقات من IndexedDB
-      try{
-        const db = await dbPromise;
-        if(db){
-          const tx = db.transaction('attachments','readwrite');
-          tx.objectStore('attachments').clear();
-          await new Promise((r,_)=>{ tx.oncomplete=r; });
-        }
-      }catch{}
       state = { days:{} };
       save(state);
       renderDay(selected);
@@ -833,9 +617,11 @@
 
     const label = mode==='all' ? 'تقرير اليوم (الكل)' : (mode==='in' ? 'تقرير واردات اليوم' : 'تقرير صادرات اليوم');
 
+    // عنوان المستند (اسم ملف PDF الافتراضي في معظم المتصفحات)
     const oldTitle = document.title;
     document.title = `${label} - ${dateKey}`;
 
+    // بناء محتوى التقرير
     const rows = list.map((it, idx) => `
       <tr>
         <td>${idx+1}</td>
@@ -897,35 +683,11 @@
       </div>
     `;
 
+    // طباعة (الحفظ كـ PDF من حوار الطباعة)
     const after = ()=>{ document.title = oldTitle; window.removeEventListener('afterprint', after); };
     window.addEventListener('afterprint', after);
     setTimeout(()=> window.print(), 20);
   }
-
-  // استعراض المرفقات
-  let attTempUrls = [];
-  async function openAttachments(ids){
-    attBody.innerHTML=''; attTempUrls.forEach(u=> URL.revokeObjectURL(u)); attTempUrls=[];
-    if(!ids.length){ toast('لا توجد مرفقات'); return; }
-    for(const id of ids){
-      try{
-        const blob = await getAttachment(id);
-        if(!blob) continue;
-        const url = URL.createObjectURL(blob);
-        attTempUrls.push(url);
-        const a = document.createElement('a');
-        a.href = url; a.target = '_blank'; a.rel="noopener";
-        a.innerHTML = `<img src="${url}" alt="مرفق" style="width:140px;height:140px;object-fit:cover;border:1px solid var(--border);border-radius:8px" />`;
-        attBody.appendChild(a);
-      }catch{}
-    }
-    attDialog.showModal();
-  }
-  attClose?.addEventListener('click', ()=>{
-    attDialog.close();
-    attTempUrls.forEach(u=> URL.revokeObjectURL(u));
-    attTempUrls=[];
-  });
 
   // تشغيل أولي
   (function boot(){
@@ -933,10 +695,6 @@
     initDateControls();
     renderDay(selected);
     renderHistory();
-    if(!('indexedDB' in window)){
-      filesInput?.setAttribute('disabled','');
-      ocrBtn?.setAttribute('disabled','');
-    }
   })();
 })();
 </script>
